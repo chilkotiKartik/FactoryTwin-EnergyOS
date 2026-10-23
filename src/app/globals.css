@@ -1,0 +1,134 @@
+@import "tailwindcss";
+
+/*
+ * FactoryTwin EnergyOS design tokens.
+ * Graphite-navy shell, warm-neutral analytical workspace, amber = energy
+ * warnings / opportunities, teal = validated positive outcomes, red = critical.
+ */
+:root {
+  --shell: #0f1727;
+  --shell-2: #172238;
+  --shell-3: #22304b;
+  --shell-ink: #d3dae8;
+  --shell-muted: #8794ad;
+
+  --canvas: #f2f2ee;
+  --surface: #ffffff;
+  --surface-2: #f8f8f5;
+  --surface-3: #efefea;
+  --line: #e1e1db;
+  --line-strong: #c9c9c1;
+
+  --ink: #151a22;
+  --ink-2: #4a505c;
+  --ink-3: #767c87;
+
+  --amber: #b45309;
+  --amber-mark: #d97706;
+  --amber-soft: #fdf1d8;
+  --teal: #0f766e;
+  --teal-mark: #14937f;
+  --teal-soft: #dcf2ee;
+  --red: #b42318;
+  --red-mark: #d92d20;
+  --red-soft: #fde7e4;
+  --blue: #2a78d6;
+  --blue-soft: #e3eefb;
+  --violet: #6250d6;
+
+  --band-solar: #fff4cf;
+  --band-peak: #fde4e1;
+  --band-offpeak: #e3eefb;
+
+  --focus: #2a78d6;
+}
+
+@theme inline {
+  --color-shell: var(--shell);
+  --color-shell-2: var(--shell-2);
+  --color-shell-3: var(--shell-3);
+  --color-shell-ink: var(--shell-ink);
+  --color-shell-muted: var(--shell-muted);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-amber: var(--amber);
+  --color-amber-mark: var(--amber-mark);
+  --color-amber-soft: var(--amber-soft);
+  --color-teal: var(--teal);
+  --color-teal-mark: var(--teal-mark);
+  --color-teal-soft: var(--teal-soft);
+  --color-red: var(--red);
+  --color-red-mark: var(--red-mark);
+  --color-red-soft: var(--red-soft);
+  --color-blue: var(--blue);
+  --color-blue-soft: var(--blue-soft);
+  --color-violet: var(--violet);
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, monospace;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Hatched fill used for holding intervals (pattern + colour, never colour alone). */
+.hatch-amber {
+  background-image: repeating-linear-gradient(135deg, var(--amber-mark) 0 2px, transparent 2px 6px);
+  background-color: var(--amber-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-full {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes popIn {
+  from { opacity: 0; transform: translate(-50%, -48%) scale(0.98); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
