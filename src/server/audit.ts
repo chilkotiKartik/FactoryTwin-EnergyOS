@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { and, asc, eq, isNull, isNotNull, desc, sql } from "drizzle-orm";
 import type { DB } from "@/db/client";
-import { getDb } from "@/db/client";
+import { existingDb, getDb } from "@/db/client";
 import { auditEvents } from "@/db/schema";
 import type { Actor } from "./context";
 
@@ -30,7 +30,8 @@ export async function audit(
   // Seal soon when written on the app's main connection. An event written inside a
   // transaction is not committed yet; the periodic sealer or the next verification
   // picks it up. (A transaction handle must never be reused after it closes.)
-  if ((db as unknown) === getDb()) scheduleSeal(getDb());
+  const main = existingDb();
+  if (main && (db as unknown) === main) scheduleSeal(main);
 }
 
 // --- Hash chain -------------------------------------------------------------
