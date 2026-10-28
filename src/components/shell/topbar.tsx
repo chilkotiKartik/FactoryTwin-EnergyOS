@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import * as Menu from "@radix-ui/react-dropdown-menu";
-import { Bell, CalendarDays, ChevronDown, ClipboardCheck, LogOut, Radio, TriangleAlert, WifiOff, FlaskConical, Building2 } from "lucide-react";
+import { Bell, CalendarDays, ChevronDown, ClipboardCheck, LogOut, UserCog, Radio, TriangleAlert, WifiOff, FlaskConical, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { logoutAction, setDayAction, switchFactoryAction } from "@/app/actions";
 import { cn } from "@/lib/cn";
@@ -177,6 +177,11 @@ export function Topbar({ actor, factories, activeFactoryId, mode, day, days, tim
                   </p>
                 </div>
                 <Menu.Separator className="my-1 h-px bg-line" />
+                <Menu.Item asChild>
+                  <Link href="/account" className="flex w-full items-center gap-2 rounded px-3 py-2 text-[13px] text-ink outline-none data-[highlighted]:bg-surface-3">
+                    <UserCog className="size-4" /> Account and password
+                  </Link>
+                </Menu.Item>
                 <form action={logoutAction}>
                   <Menu.Item asChild>
                     <button type="submit" className="flex w-full items-center gap-2 rounded px-3 py-2 text-[13px] text-ink outline-none data-[highlighted]:bg-surface-3">

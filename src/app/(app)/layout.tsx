@@ -1,4 +1,5 @@
 import { and, desc, eq, isNotNull, inArray } from "drizzle-orm";
+import { redirect } from "next/navigation";
 import { getDb } from "@/db/client";
 import { anomalies, heats, recommendations } from "@/db/schema";
 import { requireActor } from "@/server/auth/session-next";
@@ -10,6 +11,7 @@ import { can } from "@/server/permissions";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const actor = await requireActor();
+  if (actor.mustChangePassword) redirect("/account?first=1");
   const db = getDb();
   const [mode, { day, days }, pending, high] = await Promise.all([
     dataMode(db, actor),

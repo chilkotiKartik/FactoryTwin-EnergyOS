@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
 import { getDb } from "@/db/client";
 import { requireActor } from "@/server/auth/session-next";
-import { can, ROLE_LABEL } from "@/server/permissions";
+import { can } from "@/server/permissions";
 import { getSettings } from "@/server/services/settings";
 import { listMeters } from "@/server/services/meters";
+import { listTeam } from "@/server/services/team";
+import { listAlerts } from "@/server/services/alerts";
+import { TeamPanel } from "@/components/team/team-panel";
+import { WebhookForm } from "@/components/alerts/alerts-panel";
+import { localTime } from "@/lib/format";
 import { PageHeader } from "@/components/ui/page-header";
 import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +19,7 @@ export const metadata: Metadata = { title: "Factory settings" };
 export default async function SettingsPage() {
   const actor = await requireActor();
   const db = getDb();
-  const [{ factory: f, furnace, team }, meters] = await Promise.all([getSettings(db, actor), listMeters(db, actor)]);
+  const [{ factory: f, furnace }, meters, team, recentAlerts] = await Promise.all([getSettings(db, actor), listMeters(db, actor), listTeam(db, actor), listAlerts(db, actor, 8)]);
   const canConfigure = can(actor.role, "factory.configure");
   return (
     <>
@@ -49,16 +54,29 @@ export default async function SettingsPage() {
           <Panel>
             <PanelHeader title="Team" subtitle="Roles are enforced on the server for every action." />
             <PanelBody>
-              <ul className="flex flex-col gap-2 text-[13px]">
-                {team.map((t) => (
-                  <li key={t.email} className="flex items-center justify-between gap-2">
-                    <span>
-                      <span className="font-medium">{t.name}</span> <span className="text-ink-3">{t.email}</span>
-                    </span>
-                    <Badge>{ROLE_LABEL[t.role]}</Badge>
-                  </li>
-                ))}
-              </ul>
+              <TeamPanel members={team} selfId={actor.userId} canManage={can(actor.role, "team.manage")} />
+            </PanelBody>
+          </Panel>
+          <Panel>
+            <PanelHeader title="Alerts" subtitle="High anomalies, pending approvals, paused advice and offline meters. Sent as signed JSON to your webhook (for example a WhatsApp or SMS gateway)." />
+            <PanelBody className="flex flex-col gap-3 text-[13px]">
+              <WebhookForm current={f.alertWebhookUrl} canEdit={canConfigure} />
+              {recentAlerts.length ? (
+                <ul className="flex flex-col gap-1.5 border-t border-line pt-3">
+                  {recentAlerts.map((x) => (
+                    <li key={x.id} className="flex items-start justify-between gap-2">
+                      <span className="min-w-0">
+                        <span className="font-medium">{x.title}</span> <span className="text-ink-3">{localTime(x.createdAt, f.timeZone, true)}</span>
+                      </span>
+                      <Badge tone={x.deliveredAt ? "teal" : x.deliveryError ? "red" : "neutral"} title={x.deliveryError ?? undefined}>
+                        {x.deliveredAt ? "sent" : x.deliveryError ? "failed" : "in app"}
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-ink-3">No alerts yet.</p>
+              )}
             </PanelBody>
           </Panel>
           <Panel>
@@ -70,6 +88,11 @@ export default async function SettingsPage() {
                     <span className="font-medium">{m.name}</span>
                     <Badge tone={m.ingestTokenHash ? "teal" : "neutral"}>{m.ingestTokenHash ? "token issued" : "no token"}</Badge>
                   </div>
+                  {m.ingestTokenHash ? (
+                    <p className="text-ink-3">
+                      Issued {m.ingestTokenIssuedAt ? localTime(m.ingestTokenIssuedAt, f.timeZone, true) : "—"} · last used {m.ingestTokenLastUsedAt ? localTime(m.ingestTokenLastUsedAt, f.timeZone, true) : "never"}
+                    </p>
+                  ) : null}
                   {f.isSimulation ? (
                     <p className="text-ink-3">Live ingest is disabled in a simulation factory so synthetic and measured data never mix.</p>
                   ) : canConfigure ? (

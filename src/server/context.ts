@@ -14,6 +14,8 @@ export interface Actor {
   role: Role;
   factory: FactoryRow;
   memberships: { factoryId: string; factoryName: string; role: Role; isSimulation: boolean }[];
+  /** The account was created or reset with a one-time password that must be changed. */
+  mustChangePassword?: boolean;
 }
 
 export const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
@@ -24,7 +26,7 @@ export async function sessionFromToken(db: DB, token: string | undefined | null)
     .select({ session: sessions, user: users })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
-    .where(and(eq(sessions.id, hashToken(token)), gt(sessions.expiresAt, Date.now())))
+    .where(and(eq(sessions.id, hashToken(token)), gt(sessions.expiresAt, Date.now()), eq(users.disabled, false)))
     .limit(1);
   return rows[0] ?? null;
 }
@@ -36,7 +38,7 @@ export async function sessionFromToken(db: DB, token: string | undefined | null)
  */
 export async function resolveActor(db: DB, userId: string, preferredFactoryId?: string | null): Promise<Actor> {
   const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
-  if (!user) throw new AppError("UNAUTHENTICATED", "Please sign in again.");
+  if (!user || user.disabled) throw new AppError("UNAUTHENTICATED", "Please sign in again.");
   const rows = await db
     .select({ m: memberships, f: factories })
     .from(memberships)
@@ -52,6 +54,7 @@ export async function resolveActor(db: DB, userId: string, preferredFactoryId?: 
     role: chosen.m.role,
     factory: chosen.f,
     memberships: rows.map((r) => ({ factoryId: r.f.id, factoryName: r.f.name, role: r.m.role, isSimulation: r.f.isSimulation })),
+    mustChangePassword: user.mustChangePassword,
   };
 }
 

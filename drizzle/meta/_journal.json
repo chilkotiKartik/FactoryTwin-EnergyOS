@@ -15,6 +15,13 @@
       "when": 1793199569815,
       "tag": "0001_robust_crusher_hogan",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793200110454,
+      "tag": "0002_hardening_phase2",
+      "breakpoints": true
     }
   ]
 }

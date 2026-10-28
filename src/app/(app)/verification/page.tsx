@@ -3,6 +3,7 @@ import Link from "next/link";
 import { and, eq } from "drizzle-orm";
 import { FileCheck2 } from "lucide-react";
 import { getDb } from "@/db/client";
+import { AppError } from "@/server/errors";
 import { heats, recommendations } from "@/db/schema";
 import { requireActor } from "@/server/auth/session-next";
 import { can } from "@/server/permissions";
@@ -10,7 +11,7 @@ import { availableDays } from "@/server/services/analytics";
 import { listExecutions } from "@/server/services/execution";
 import { getPlan } from "@/server/services/plans";
 import { activeSchedule } from "@/server/services/recommendations";
-import { assumptionsSchema, computeVerification, DEFAULT_ASSUMPTIONS, listVerificationReports } from "@/server/services/verification";
+import { assumptionsSchema, computeVerification, DEFAULT_ASSUMPTIONS, listVerificationReports, BASELINE_PERIODS } from "@/server/services/verification";
 import { PageHeader } from "@/components/ui/page-header";
 import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
 import { EmptyState } from "@/components/ui/empty";
@@ -58,7 +59,18 @@ export default async function VerificationPage(props: PageProps<"/verification">
     opexInrPerYear: Number(str(sp.opex) ?? DEFAULT_ASSUMPTIONS.opexInrPerYear),
   });
   const assumptions = parsed.success ? parsed.data : DEFAULT_ASSUMPTIONS;
-  const v = baseline && comparison ? await computeVerification(db, actor, baseline, comparison, assumptions) : null;
+  const bdays = (BASELINE_PERIODS as readonly number[]).includes(Number(str(sp.bdays))) ? Number(str(sp.bdays)) : 1;
+  let v: Awaited<ReturnType<typeof computeVerification>> | null = null;
+  let periodError: string | null = null;
+  if (baseline && comparison) {
+    try {
+      v = await computeVerification(db, actor, baseline, comparison, assumptions, { baselinePeriodDays: bdays });
+    } catch (e) {
+      if (!(e instanceof AppError)) throw e;
+      periodError = e.message;
+      v = await computeVerification(db, actor, baseline, comparison, assumptions);
+    }
+  }
 
   return (
     <>
@@ -103,7 +115,7 @@ export default async function VerificationPage(props: PageProps<"/verification">
         <>
           <Panel className="mb-4">
             <PanelBody>
-              <form className="grid items-end gap-3 sm:grid-cols-3 lg:grid-cols-7" method="get">
+              <form className="grid items-end gap-3 sm:grid-cols-3 lg:grid-cols-8" method="get">
                 <label className="flex flex-col gap-1 text-[12px] font-medium text-ink-2 lg:col-span-1">
                   Baseline day
                   <Select name="baseline" defaultValue={baseline}>
@@ -111,6 +123,16 @@ export default async function VerificationPage(props: PageProps<"/verification">
                       <option key={d} value={d}>
                         {d}
                         {execDays.has(d) ? " (outcome)" : ""}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+                <label className="flex flex-col gap-1 text-[12px] font-medium text-ink-2">
+                  Baseline period
+                  <Select name="bdays" defaultValue={String(bdays)}>
+                    {BASELINE_PERIODS.map((n) => (
+                      <option key={n} value={n}>
+                        {n === 1 ? "That day only" : `${n} days ending then`}
                       </option>
                     ))}
                   </Select>
@@ -146,6 +168,7 @@ export default async function VerificationPage(props: PageProps<"/verification">
                   Recalculate
                 </Button>
               </form>
+              {periodError ? <p className="mt-2 text-[13px] text-amber">{periodError} Showing a single-day baseline.</p> : null}
               {!parsed.success ? <p className="mt-2 text-[13px] text-red">Some assumptions were out of range; defaults are shown instead.</p> : null}
               {baseline === comparison ? <p className="mt-2 text-[13px] text-amber">Baseline and comparison are the same day.</p> : null}
             </PanelBody>
@@ -153,7 +176,7 @@ export default async function VerificationPage(props: PageProps<"/verification">
           <VerificationView v={v} tz={tz} />
           {can(actor.role, "verification.create") && baseline !== comparison ? (
             <div className="mt-4 flex justify-end">
-              <SaveReportButton baselineDay={baseline!} comparisonDay={comparison!} assumptions={assumptions} />
+              <SaveReportButton baselineDay={baseline!} comparisonDay={comparison!} baselinePeriodDays={periodError ? 1 : bdays} assumptions={assumptions} />
             </div>
           ) : null}
         </>

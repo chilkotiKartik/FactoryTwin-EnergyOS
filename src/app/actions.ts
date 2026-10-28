@@ -9,9 +9,11 @@ import { anomalies, meters, sessions, users } from "@/db/schema";
 import { isIsoDate } from "@/domain/time";
 import { AppError, toActionError, type ActionResult } from "@/server/errors";
 import { requirePerm, type Actor } from "@/server/context";
-import { currentActor, endSession, setActiveFactory, startSession } from "@/server/auth/session-next";
+import { currentActor, currentSessionId, endSession, setActiveFactory, startSession } from "@/server/auth/session-next";
+import { addMember, changeOwnPassword, changeRole, removeMember, resetPassword, setDisabled, signOutEverywhere } from "@/server/services/team";
+import { sendTestAlert, setAlertWebhook } from "@/server/services/alerts";
 import { hashPassword, hashToken, newToken, verifyPassword } from "@/server/auth/password";
-import { audit } from "@/server/audit";
+import { audit, verifyAuditChain } from "@/server/audit";
 import { runAnalysis } from "@/server/services/analysis";
 import { createHeat, updateHeat } from "@/server/services/heats";
 import { commitCsv, previewCsv, type CsvPreview, type DeclaredSource } from "@/server/services/meters";
@@ -26,10 +28,11 @@ import { updateSettings } from "@/server/services/settings";
 
 import { DAY_COOKIE } from "@/lib/constants";
 
-async function withActor<T>(fn: (db: DB, actor: Actor) => Promise<T>): Promise<ActionResult<T>> {
+async function withActor<T>(fn: (db: DB, actor: Actor) => Promise<T>, opts: { allowPendingPassword?: boolean } = {}): Promise<ActionResult<T>> {
   try {
     const actor = await currentActor();
     if (!actor) throw new AppError("UNAUTHENTICATED", "Your session has ended. Sign in again.");
+    if (actor.mustChangePassword && !opts.allowPendingPassword) throw new AppError("FORBIDDEN", "Set your own password first (Account page).");
     const data = await fn(getDb(), actor);
     revalidatePath("/", "layout");
     return { ok: true, data };
@@ -70,7 +73,7 @@ export async function loginAction(_prev: ActionResult | null, form: FormData): P
   // Always run scrypt, so the response time does not reveal whether the email exists.
   dummyHash ??= hashPassword("not-a-real-password");
   const ok = await verifyPassword(password, user?.passwordHash ?? (await dummyHash));
-  if (!user || !ok) {
+  if (!user || !ok || user.disabled) {
     recordFailure(emailKey);
     recordFailure(ipKey);
     return { ok: false, message: "Email or password is incorrect." };
@@ -79,7 +82,7 @@ export async function loginAction(_prev: ActionResult | null, form: FormData): P
   await db.delete(sessions).where(lt(sessions.expiresAt, Date.now()));
   await startSession(user.id);
   await audit(db, null, "auth.login", "user", user.id, { email }, null);
-  redirect("/dashboard");
+  redirect(user.mustChangePassword ? "/account?first=1" : "/dashboard");
 }
 
 export async function logoutAction() {
@@ -181,7 +184,7 @@ export async function recordOutcomeAction(planId: string) {
   return withActor((db, a) => recordSimulatedOutcome(db, a, planId));
 }
 
-export async function createVerificationAction(input: { baselineDay: string; comparisonDay: string; assumptions: unknown; title?: string }) {
+export async function createVerificationAction(input: { baselineDay: string; comparisonDay: string; assumptions: unknown; title?: string; baselinePeriodDays?: number }) {
   return withActor((db, a) => createVerificationReport(db, a, input));
 }
 
@@ -202,8 +205,74 @@ export async function issueIngestTokenAction(meterId: string) {
     const m = await db.query.meters.findFirst({ where: eq(meters.id, meterId) });
     if (!m || m.factoryId !== a.factory.id) throw new AppError("NOT_FOUND", "Meter not found.");
     const token = `eos_${newToken()}`;
-    await db.update(meters).set({ ingestTokenHash: hashToken(token) }).where(eq(meters.id, meterId));
+    await db
+      .update(meters)
+      .set({ ingestTokenHash: hashToken(token), ingestTokenIssuedAt: Date.now(), ingestTokenLastUsedAt: null, lastCounterKwh: null, lastCounterTs: null })
+      .where(eq(meters.id, meterId));
     await audit(db, a, "meter.issue_token", "meter", meterId, {});
     return { token };
+  });
+}
+
+/** Revoke a meter's ingest token: the meter can no longer push readings. */
+export async function revokeIngestTokenAction(meterId: string) {
+  return withActor(async (db, a) => {
+    requirePerm(a, "factory.configure");
+    const m = await db.query.meters.findFirst({ where: eq(meters.id, meterId) });
+    if (!m || m.factoryId !== a.factory.id) throw new AppError("NOT_FOUND", "Meter not found.");
+    await db.update(meters).set({ ingestTokenHash: null, ingestTokenIssuedAt: null, ingestTokenLastUsedAt: null }).where(eq(meters.id, meterId));
+    await audit(db, a, "meter.revoke_token", "meter", meterId, {});
+  });
+}
+
+// --- Team and account -------------------------------------------------------
+
+export async function addMemberAction(input: unknown) {
+  return withActor((db, a) => addMember(db, a, input));
+}
+
+export async function changeRoleAction(userId: string, role: string) {
+  return withActor((db, a) => changeRole(db, a, userId, role));
+}
+
+export async function removeMemberAction(userId: string) {
+  return withActor((db, a) => removeMember(db, a, userId));
+}
+
+export async function setDisabledAction(userId: string, disabled: boolean) {
+  return withActor((db, a) => setDisabled(db, a, userId, Boolean(disabled)));
+}
+
+export async function resetPasswordAction(userId: string) {
+  return withActor(async (db, a) => ({ tempPassword: await resetPassword(db, a, userId) }));
+}
+
+export async function changePasswordAction(input: unknown) {
+  return withActor(async (db, a) => changeOwnPassword(db, a, input, await currentSessionId()), { allowPendingPassword: true });
+}
+
+export async function signOutEverywhereAction() {
+  return withActor(async (db, a) => ({ ended: await signOutEverywhere(db, a, await currentSessionId()) }));
+}
+
+// --- Alerts -------------------------------------------------------------------
+
+export async function setWebhookAction(url: string | null) {
+  return withActor((db, a) => setAlertWebhook(db, a, url));
+}
+
+export async function sendTestAlertAction() {
+  return withActor(async (db, a) => {
+    const r = await sendTestAlert(db, a);
+    return { delivered: Boolean(r?.deliveredAt), error: r?.deliveryError ?? null };
+  });
+}
+
+// --- Audit --------------------------------------------------------------------
+
+export async function verifyAuditAction() {
+  return withActor(async (db, a) => {
+    requirePerm(a, "audit.view");
+    return verifyAuditChain(db, a.factory.id);
   });
 }

@@ -74,3 +74,30 @@ export async function flushAnalysis(db: DB, factoryId: string) {
   await running.get(factoryId);
   running.delete(factoryId);
 }
+
+let started = false;
+
+/**
+ * Periodic upkeep for the single server process: seal audit events into the
+ * hash chain, raise meter-offline alerts, delete expired sessions.
+ */
+export function startBackgroundJobs() {
+  if (started) return;
+  started = true;
+  const every = (ms: number, name: string, fn: () => Promise<unknown>) => {
+    const t = setInterval(() => void fn().catch((e) => console.error(`[energyos] job ${name} failed`, e)), ms);
+    t.unref?.();
+  };
+  void (async () => {
+    const [{ getDb }, { sealAuditChain }, { checkMeterHealth }, { sessions }, { lt }] = await Promise.all([
+      import("@/db/client"),
+      import("../audit"),
+      import("./alerts"),
+      import("@/db/schema"),
+      import("drizzle-orm"),
+    ]);
+    every(30_000, "audit-seal", () => sealAuditChain(getDb()));
+    every(5 * 60_000, "meter-health", () => checkMeterHealth(getDb()));
+    every(60 * 60_000, "session-cleanup", () => getDb().delete(sessions).where(lt(sessions.expiresAt, Date.now())));
+  })();
+}

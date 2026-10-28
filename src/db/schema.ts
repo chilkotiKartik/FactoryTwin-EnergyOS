@@ -27,6 +27,11 @@ export const users = sqliteTable("users", {
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
   passwordHash: text("password_hash").notNull(),
+  /** A disabled user cannot sign in and their sessions stop working. */
+  disabled: integer("disabled", { mode: "boolean" }).notNull().default(false),
+  /** Set when an owner creates the account with a one-time password; cleared on first change. */
+  mustChangePassword: integer("must_change_password", { mode: "boolean" }).notNull().default(false),
+  passwordChangedAt: integer("password_changed_at"),
   createdAt: createdAt(),
 });
 
@@ -64,6 +69,9 @@ export const factories = sqliteTable("factories", {
   maxHoldMinutes: integer("max_hold_minutes").notNull().default(60),
   minCompleteness: real("min_completeness").notNull().default(0.98),
   gridMinutes: integer("grid_minutes").notNull().default(5),
+  /** Outbound alert webhook (HTTPS). Payloads are signed with HMAC-SHA256 using alertWebhookSecret. */
+  alertWebhookUrl: text("alert_webhook_url"),
+  alertWebhookSecret: text("alert_webhook_secret"),
   createdAt: createdAt(),
 });
 
@@ -112,6 +120,11 @@ export const meters = sqliteTable("meters", {
     model: text("model").notNull().default(""),
     intervalSeconds: integer("interval_seconds").notNull().default(60),
     ingestTokenHash: text("ingest_token_hash"),
+    ingestTokenIssuedAt: integer("ingest_token_issued_at"),
+    ingestTokenLastUsedAt: integer("ingest_token_last_used_at"),
+    /** Last cumulative energy register value seen (meters that report a kWh counter). */
+    lastCounterKwh: real("last_counter_kwh"),
+    lastCounterTs: integer("last_counter_ts"),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("meters_ingest_token_uq").on(t.ingestTokenHash)],
@@ -539,6 +552,9 @@ export const auditEvents = sqliteTable(
     entityId: text("entity_id"),
     details: text("details", { mode: "json" }).$type<Record<string, unknown>>().notNull().default({}),
     createdAt: integer("created_at").notNull(),
+    /** Hash chain (per factory): hash = SHA-256(prevHash + canonical event). Set by the sealer. */
+    prevHash: text("prev_hash"),
+    hash: text("hash"),
   },
   (t) => [index("audit_factory_time_idx").on(t.factoryId, t.createdAt)],
 );
@@ -571,3 +587,26 @@ export const energyBaselines = sqliteTable("energy_baselines", {
   createdBy: text("created_by"),
   createdAt: createdAt(),
 });
+
+export const ALERT_KINDS = ["ANOMALY_HIGH", "APPROVAL_PENDING", "ADVICE_PAUSED", "METER_OFFLINE", "SEC_DRIFT", "TEST"] as const;
+export type AlertKind = (typeof ALERT_KINDS)[number];
+
+/** Alerts raised by the system. `dedupeKey` makes raising the same alert twice a no-op. */
+export const alerts = sqliteTable(
+  "alerts",
+  {
+    id: id(),
+    factoryId: text("factory_id")
+      .notNull()
+      .references(() => factories.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: ALERT_KINDS }).notNull(),
+    dedupeKey: text("dedupe_key").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    href: text("href"),
+    deliveredAt: integer("delivered_at"),
+    deliveryError: text("delivery_error"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("alerts_factory_key_uq").on(t.factoryId, t.dedupeKey), index("alerts_factory_time_idx").on(t.factoryId, t.createdAt)],
+);

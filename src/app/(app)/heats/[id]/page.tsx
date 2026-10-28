@@ -97,7 +97,7 @@ export default async function HeatPage(props: PageProps<"/heats/[id]">) {
           <div className="grid grid-cols-2 gap-px bg-line sm:grid-cols-4">
             {[
               ["Actual", fmt(kwh, 1), "kWh", h.meterKwh !== null ? "Σ meter readings, start → tap" : "Manual entry"],
-              ["Expected", fmt(a?.expectedKwh ?? h.expectedKwh, 1), "kWh", model ? `${model.kind === "OLS" ? "OLS fit" : "Physics prior"} · ${model.version}` : "—"],
+              ["Expected", fmt(a?.expectedKwh ?? h.expectedKwh, 1), "kWh", model ? `${model.kind === "OLS" ? "Robust least-squares fit" : "Physics prior"} · ${model.version}` : "—"],
               ["Variance", a?.varianceKwh != null ? `${a.varianceKwh >= 0 ? "+" : "−"}${fmt(Math.abs(a.varianceKwh), 1)}` : "—", "kWh", pct(a?.variancePct)],
               ["kWh per tonne", kwh !== null && h.pouredKg ? fmt(kwh / (h.pouredKg / 1000), 1) : "—", "kWh/t", `${fmt(h.pouredKg)} kg poured`],
             ].map(([k, v, u, s]) => (
@@ -198,7 +198,7 @@ export default async function HeatPage(props: PageProps<"/heats/[id]">) {
             {model ? (
               <>
                 <p className="font-medium">
-                  {model.version} · {model.kind === "OLS" ? "least-squares fit" : "physics prior"}
+                  {model.version} · {model.kind === "OLS" ? "robust least-squares fit" : "physics prior"}
                 </p>
                 <p className="num mt-1 text-ink-2">
                   kWh ≈ {fmt(model.coefficients.intercept, 1)} + {fmt(model.coefficients.perTonne, 1)}·t + {fmt(model.coefficients.coldStart, 1)}·cold + {fmt(model.coefficients.perHoldMinute, 2)}·hold_min

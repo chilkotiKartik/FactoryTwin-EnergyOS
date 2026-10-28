@@ -106,3 +106,21 @@ test("phone width has no horizontal page scroll", async ({ page }) => {
     expect(overflow, p).toBeLessThanOrEqual(1);
   }
 });
+
+test("owner verifies the audit chain, sees team and alerts, and pages carry a nonce CSP", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error" && /Content Security Policy/i.test(m.text())) errors.push(m.text());
+  });
+  await login(page, "owner@foundry-a.test");
+  const res = await page.goto("/audit");
+  expect(res!.headers()["content-security-policy"]).toMatch(/script-src 'self' 'nonce-[^']+' 'strict-dynamic'/);
+  await page.getByRole("button", { name: "Verify integrity" }).click();
+  await expect(page.getByRole("status").filter({ hasText: /verified/ })).toBeVisible();
+  await page.goto("/settings");
+  await expect(page.getByText("Add a member")).toBeVisible();
+  await expect(page.getByLabel("Webhook URL")).toBeVisible();
+  await page.goto("/account");
+  await expect(page.getByRole("button", { name: "Change password" })).toBeVisible();
+  expect(errors).toEqual([]);
+});

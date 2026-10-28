@@ -10,6 +10,8 @@ import { requirePerm } from "../context";
 import { audit } from "../audit";
 import { newId } from "../ids";
 import { latestModel, requireFurnace, primaryMeter } from "./common";
+import { raiseAlert } from "./alerts";
+import { secDrift } from "./drift";
 
 export interface AnalysisSummary {
   heatsAnalysed: number;
@@ -152,6 +154,7 @@ export async function analyseFactory(db: DB, actor: Actor, reason: string): Prom
   const fitId = reuse ? previousFit.id : newId("fit");
   const now = Date.now();
   let flaggedCount = 0;
+  const fresh: { id: string; heatId: string; heatNo: string; day: string; explanation: string }[] = [];
   await db.transaction(async (tx) => {
     if (!reuse) {
       await tx.insert(modelFits).values({
@@ -180,6 +183,7 @@ export async function analyseFactory(db: DB, actor: Actor, reason: string): Prom
       for (const r of rows) existing.set(r.heatId, r.id);
     }
     const cleared: string[] = [];
+
     for (const { p, a } of results) {
       const quality: typeof heats.$inferSelect.dataQuality = p.h.tapAt === null ? "OPEN" : p.comp === null || p.comp === 0 ? "NO_METER_DATA" : p.comp >= 0.98 ? "COMPLETE" : "PARTIAL";
       const next = {
@@ -218,7 +222,11 @@ export async function analyseFactory(db: DB, actor: Actor, reason: string): Prom
       // Update in place: the anomaly keeps its id (links stay valid) and its review status.
       const prevId = existing.get(p.h.id);
       if (prevId) await tx.update(anomalies).set(values).where(eq(anomalies.id, prevId));
-      else await tx.insert(anomalies).values({ id: newId("anm"), factoryId: f.id, heatId: p.h.id, rule: a.rule, ...values, status: "OPEN", detectedAt: now });
+      else {
+        const anomalyId = newId("anm");
+        await tx.insert(anomalies).values({ id: anomalyId, factoryId: f.id, heatId: p.h.id, rule: a.rule, ...values, status: "OPEN", detectedAt: now });
+        if (a.severity === "HIGH") fresh.push({ id: anomalyId, heatId: p.h.id, heatNo: p.h.heatNo, day: p.h.dayDate, explanation: a.explanation });
+      }
     }
     for (let i = 0; i < cleared.length; i += 400) {
       await tx.delete(anomalies).where(inArray(anomalies.id, cleared.slice(i, i + 400)));
@@ -232,6 +240,16 @@ export async function analyseFactory(db: DB, actor: Actor, reason: string): Prom
       model: { kind: model.kind, n: model.n, r2: model.r2, rmseKwh: model.rmseKwh },
     });
   });
+  // Alert on new high-variance heats and on sustained drift. A scenario reload is not news.
+  if (reason !== "demo.reset") {
+    const d = await secDrift(db, actor);
+    if (d.status === "DRIFT_UP" && d.since) {
+      await raiseAlert(db, f, { kind: "SEC_DRIFT", key: `drift:${d.since}`, title: "Furnace energy is drifting up", body: d.message, href: "/anomalies" });
+    }
+    for (const x of fresh) {
+      await raiseAlert(db, f, { kind: "ANOMALY_HIGH", key: `anomaly:${x.id}`, title: `${x.heatNo} on ${x.day}: high energy variance`, body: x.explanation, href: `/heats/${x.heatId}` });
+    }
+  }
   return { heatsAnalysed: heatRows.length, anomaliesFlagged: flaggedCount, model, modelFitId: fitId, fromDay, toDay };
 }
 

@@ -9,6 +9,7 @@ export async function GET(req: Request, ctx: RouteContext<"/api/export/[kind]">)
   const { kind } = await ctx.params;
   const actor = await currentActor();
   if (!actor) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
+  if (actor.mustChangePassword) return NextResponse.json({ error: "Set your own password first." }, { status: 403 });
   const url = new URL(req.url);
   const from = url.searchParams.get("from") ?? "";
   const to = url.searchParams.get("to") ?? from;

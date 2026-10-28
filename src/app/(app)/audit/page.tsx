@@ -10,6 +10,7 @@ import { Table, Td, Th } from "@/components/ui/table";
 import { Input } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
 import { localTime } from "@/lib/format";
+import { VerifyChain } from "@/components/audit/verify-chain";
 
 export const metadata: Metadata = { title: "Audit log" };
 
@@ -38,7 +39,8 @@ export default async function AuditPage(props: PageProps<"/audit">) {
       <PageHeader
         title="Audit log"
         crumbs={[{ label: actor.factory.name }, { label: "Audit log" }]}
-        description="Append-only record of sign-ins, data changes, imports, analyses, optimiser runs, decisions, outcomes and exports for this factory."
+        description="Append-only record of sign-ins, data changes, imports, analyses, optimiser runs, decisions, outcomes and exports for this factory. Each event is sealed into a hash chain, so a changed or deleted entry is detected."
+        actions={<VerifyChain />}
       />
       <form method="get" className="mb-3 flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1 text-[12px] text-ink-3">

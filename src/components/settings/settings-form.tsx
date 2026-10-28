@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Copy, KeyRound, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { issueIngestTokenAction, updateSettingsAction } from "@/app/actions";
+import { issueIngestTokenAction, revokeIngestTokenAction, updateSettingsAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/field";
 import { hhmm } from "@/lib/format";
@@ -109,6 +109,7 @@ export function SettingsForm({ initial, canEdit }: { initial: SettingsValues; ca
 }
 
 export function IngestToken({ meterId, hasToken }: { meterId: string; hasToken: boolean }) {
+  const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
   const [pending, start] = useTransition();
   return (
@@ -127,6 +128,26 @@ export function IngestToken({ meterId, hasToken }: { meterId: string; hasToken: 
       >
         <KeyRound /> {hasToken ? "Rotate token" : "Issue ingest token"}
       </Button>
+      {hasToken ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-red"
+          disabled={pending}
+          onClick={() =>
+            start(async () => {
+              if (!confirm("Revoke this meter's token? The meter stops being able to send readings.")) return;
+              const r = await revokeIngestTokenAction(meterId);
+              if (!r.ok) return void toast.error(r.message ?? "Could not revoke.");
+              setToken(null);
+              toast.success("Token revoked.");
+              router.refresh();
+            })
+          }
+        >
+          Revoke token
+        </Button>
+      ) : null}
       {token ? (
         <div className="rounded-md border border-amber/30 bg-amber-soft p-2 text-[12px]">
           <p className="mb-1 font-medium text-amber">Copy this token now. It is shown once and stored only as a hash. Any previous token stops working.</p>
