@@ -16,18 +16,18 @@ pnpm start            # listens on :3000; put it behind a TLS reverse proxy (ngi
 
 With `SEED_DEMO_USERS="false"` no logins are created; create the first owner account directly in the database or re-enable demo seeding on a private instance.
 
-## Container (outline)
+## Container
 
-```dockerfile
-FROM node:22-slim
-WORKDIR /app
-RUN corepack enable
-COPY . .
-RUN pnpm install --frozen-lockfile && pnpm build
-ENV DATABASE_URL=file:/data/energyos.db COOKIE_SECURE=true SEED_DEMO_USERS=false
-VOLUME /data
-CMD ["sh", "-c", "pnpm db:setup && pnpm start"]
+A `Dockerfile` is included. It runs as a non-root user, stores the database on the `/data` volume and has a health check.
+
+```bash
+docker build -t energyos .
+docker volume create energyos
+docker run --rm -v energyos:/data energyos pnpm db:setup     # migrations, once per release
+docker run -d -p 3000:3000 -v energyos:/data energyos
 ```
+
+Background analysis after meter ingest runs inside the server process, so run a single instance (or move the job to a shared queue first).
 
 ## Operations
 

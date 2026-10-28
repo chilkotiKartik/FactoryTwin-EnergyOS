@@ -7,6 +7,7 @@ import { audit } from "../audit";
 import { hashToken } from "../auth/password";
 import { AppError, validation } from "../errors";
 import { insertReadings } from "./demo";
+import { scheduleAnalysis } from "./jobs";
 
 export const MAX_INGEST_READINGS = 1440;
 
@@ -76,5 +77,6 @@ export async function ingestReadings(db: DB, token: string | null, raw: unknown)
   // Duplicates (same meter + timestamp) are ignored by the unique index; the first value wins.
   if (rows.length) await insertReadings(db, rows);
   await audit(db, null, "meter.ingest", "meter", meter.id, { received: parsed.data.readings.length, stored: rows.length, rejected: rejected.length }, factory.id);
+  if (rows.length) scheduleAnalysis(db, factory.id);
   return { meterId: meter.id, received: parsed.data.readings.length, accepted: rows.length, rejected };
 }

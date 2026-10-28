@@ -1,8 +1,8 @@
 import { and, asc, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import type { DB } from "@/db/client";
-import { anomalies, heats, meterReadings, modelFits } from "@/db/schema";
+import { anomalies, heats, meterReadings, modelFits, recommendations } from "@/db/schema";
 import { analyseHeat, ANOMALY_RULE, type HeatAnalysis } from "@/domain/anomaly";
-import { fitModel, physicsPrior, type FitRow, type EnergyModel } from "@/domain/model";
+import { expectedGoodPracticeKwh, fitModel, physicsPrior, type FitRow, type EnergyModel } from "@/domain/model";
 import { segmentTrace } from "@/domain/anomaly";
 import { addDays, localDayStart } from "@/domain/time";
 import type { Actor } from "../context";
@@ -115,7 +115,15 @@ export async function analyseFactory(db: DB, actor: Actor, reason: string): Prom
     .filter((p) => p.kwh !== null && p.comp !== null && p.comp >= 0.98 && p.hold !== null)
     .map((p) => ({ kwh: p.kwh!, chargeTonnes: p.h.chargeKg / 1000, coldStart: p.coldStart, holdMinutes: p.hold! }));
   const prior = physicsPrior(furnace.ratedKw, furnace.nominalMeltMinutes, furnace.capacityKg / 1000, f.coldExtraMinutes, f.holdingKw);
-  const model = fitModel(fitRows, prior);
+  const fitted = fitModel(fitRows, prior);
+  // Keep the stored model when the refit barely moves it. Otherwise a small data
+  // fix (one heat edited) would change the optimiser fingerprint and make every
+  // pending recommendation stale for no visible reason.
+  const previousFit = await db.query.modelFits.findFirst({ where: eq(modelFits.factoryId, f.id), orderBy: desc(modelFits.createdAt) });
+  const reuse = previousFit && modelUnchanged(previousFit, fitted, furnace.capacityKg / 1000);
+  const model: EnergyModel = reuse
+    ? { ...fitted, kind: previousFit.kind as EnergyModel["kind"], coefficients: { ...fitted.coefficients, ...previousFit.coefficients }, n: previousFit.n, r2: previousFit.r2, rmseKwh: previousFit.rmseKwh, note: previousFit.note }
+    : fitted;
 
   // Pass 3: explain each heat.
   const results: { p: (typeof prepared)[number]; a: HeatAnalysis | null }[] = prepared.map((p) => ({
@@ -141,67 +149,79 @@ export async function analyseFactory(db: DB, actor: Actor, reason: string): Prom
           ),
   }));
 
-  const fitId = newId("fit");
+  const fitId = reuse ? previousFit.id : newId("fit");
   const now = Date.now();
   let flaggedCount = 0;
   await db.transaction(async (tx) => {
-    await tx.insert(modelFits).values({
-      id: fitId,
-      factoryId: f.id,
-      version: model.version,
-      kind: model.kind,
-      coefficients: model.coefficients,
-      n: model.n,
-      r2: model.r2,
-      rmseKwh: model.rmseKwh,
-      note: model.note,
-    });
-    const ids = heatRows.map((h) => h.id);
-    const previous = ids.length
-      ? await tx.select({ heatId: anomalies.heatId, status: anomalies.status }).from(anomalies).where(and(eq(anomalies.factoryId, f.id), inArray(anomalies.heatId, ids)))
-      : [];
-    const prevStatus = new Map(previous.map((r) => [r.heatId, r.status]));
-    for (let i = 0; i < ids.length; i += 400) {
-      await tx.delete(anomalies).where(and(eq(anomalies.factoryId, f.id), inArray(anomalies.heatId, ids.slice(i, i + 400)), eq(anomalies.rule, ANOMALY_RULE)));
-    }
-    for (const { p, a } of results) {
-      const quality = p.h.tapAt === null ? "OPEN" : p.comp === null || p.comp === 0 ? "NO_METER_DATA" : p.comp >= 0.98 ? "COMPLETE" : "PARTIAL";
-      await tx
-        .update(heats)
-        .set({
-          meterKwh: p.kwh,
-          expectedKwh: a?.expectedKwh ?? null,
-          holdingMinutes: p.hold,
-          holdingKwh: p.holdKwh,
-          readingCompleteness: p.comp,
-          dataQuality: quality,
-          coldStart: p.coldStart,
-        })
-        .where(eq(heats.id, p.h.id));
-      if (a && a.flagged) {
-        flaggedCount++;
-        await tx.insert(anomalies).values({
-          id: newId("anm"),
-          factoryId: f.id,
-          heatId: p.h.id,
-          modelFitId: fitId,
-          rule: a.rule,
-          modelVersion: a.modelVersion,
-          expectedKwh: a.expectedKwh,
-          actualKwh: a.actualKwh,
-          varianceKwh: a.varianceKwh,
-          variancePct: a.variancePct,
-          thresholdKwh: a.thresholdKwh,
-          severity: a.severity,
-          evidenceLevel: a.evidenceLevel,
-          explanation: a.explanation,
-          findings: a.findings,
-          investigation: a.suggestedInvestigation,
-          status: prevStatus.get(p.h.id) ?? "OPEN",
-          provenance: p.h.provenance,
-          detectedAt: now,
-        });
+    if (!reuse) {
+      await tx.insert(modelFits).values({
+        id: fitId,
+        factoryId: f.id,
+        version: model.version,
+        kind: model.kind,
+        coefficients: model.coefficients,
+        n: model.n,
+        r2: model.r2,
+        rmseKwh: model.rmseKwh,
+        note: model.note,
+      });
+      // The model changed materially: recommendations built on the old one are stale.
+      if (previousFit) {
+        await tx.update(recommendations).set({ status: "STALE" }).where(and(eq(recommendations.factoryId, f.id), eq(recommendations.status, "PENDING")));
       }
+    }
+    const ids = heatRows.map((h) => h.id);
+    const existing = new Map<string, string>();
+    for (let i = 0; i < ids.length; i += 400) {
+      const rows = await tx
+        .select({ heatId: anomalies.heatId, id: anomalies.id })
+        .from(anomalies)
+        .where(and(eq(anomalies.factoryId, f.id), inArray(anomalies.heatId, ids.slice(i, i + 400)), eq(anomalies.rule, ANOMALY_RULE)));
+      for (const r of rows) existing.set(r.heatId, r.id);
+    }
+    const cleared: string[] = [];
+    for (const { p, a } of results) {
+      const quality: typeof heats.$inferSelect.dataQuality = p.h.tapAt === null ? "OPEN" : p.comp === null || p.comp === 0 ? "NO_METER_DATA" : p.comp >= 0.98 ? "COMPLETE" : "PARTIAL";
+      const next = {
+        meterKwh: p.kwh,
+        expectedKwh: a?.expectedKwh ?? null,
+        holdingMinutes: p.hold,
+        holdingKwh: p.holdKwh,
+        readingCompleteness: p.comp,
+        dataQuality: quality,
+        coldStart: p.coldStart,
+      };
+      // Only write heats whose derived metrics changed.
+      if ((Object.keys(next) as (keyof typeof next)[]).some((k) => !same(p.h[k], next[k]))) {
+        await tx.update(heats).set(next).where(eq(heats.id, p.h.id));
+      }
+      if (!(a && a.flagged)) {
+        if (existing.has(p.h.id)) cleared.push(existing.get(p.h.id)!);
+        continue;
+      }
+      flaggedCount++;
+      const values = {
+        modelFitId: fitId,
+        modelVersion: a.modelVersion,
+        expectedKwh: a.expectedKwh,
+        actualKwh: a.actualKwh,
+        varianceKwh: a.varianceKwh,
+        variancePct: a.variancePct,
+        thresholdKwh: a.thresholdKwh,
+        severity: a.severity,
+        evidenceLevel: a.evidenceLevel,
+        explanation: a.explanation,
+        findings: a.findings,
+        investigation: a.suggestedInvestigation,
+        provenance: p.h.provenance,
+      };
+      // Update in place: the anomaly keeps its id (links stay valid) and its review status.
+      const prevId = existing.get(p.h.id);
+      if (prevId) await tx.update(anomalies).set(values).where(eq(anomalies.id, prevId));
+      else await tx.insert(anomalies).values({ id: newId("anm"), factoryId: f.id, heatId: p.h.id, rule: a.rule, ...values, status: "OPEN", detectedAt: now });
+    }
+    for (let i = 0; i < cleared.length; i += 400) {
+      await tx.delete(anomalies).where(inArray(anomalies.id, cleared.slice(i, i + 400)));
     }
     await audit(tx, actor, reason === "analysis.run" ? "analysis.run" : "analysis.refresh", "model_fit", fitId, {
       trigger: reason,
@@ -213,6 +233,20 @@ export async function analyseFactory(db: DB, actor: Actor, reason: string): Prom
     });
   });
   return { heatsAnalysed: heatRows.length, anomaliesFlagged: flaggedCount, model, modelFitId: fitId, fromDay, toDay };
+}
+
+const same = (a: unknown, b: unknown) => (typeof a === "number" && typeof b === "number" ? Math.abs(a - b) < 1e-9 : a === b);
+
+/**
+ * A refit counts as unchanged when the expected energy of a full warm heat and a
+ * full cold heat each move by less than 0.5%, and the holding rate by less than 5%.
+ */
+export function modelUnchanged(prev: { kind: string; version: string; coefficients: Partial<EnergyModel["coefficients"]> }, next: EnergyModel, fullChargeTonnes: number): boolean {
+  if (prev.kind !== next.kind || prev.version !== next.version) return false;
+  const p: EnergyModel = { ...next, coefficients: { intercept: 0, perTonne: 0, coldStart: 0, perHoldMinute: 0, ...prev.coefficients } };
+  const close = (x: number, y: number, tol: number) => Math.abs(x - y) <= tol * Math.max(Math.abs(y), 1e-9);
+  const kwh = (m: EnergyModel, cold: boolean) => expectedGoodPracticeKwh(m, { chargeTonnes: fullChargeTonnes, coldStart: cold });
+  return close(kwh(p, false), kwh(next, false), 0.005) && close(kwh(p, true), kwh(next, true), 0.005) && close(p.coefficients.perHoldMinute, next.coefficients.perHoldMinute, 0.05);
 }
 
 /** Recompute the analysis of a single heat (after an edit) using the latest model. */

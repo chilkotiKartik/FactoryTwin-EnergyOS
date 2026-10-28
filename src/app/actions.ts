@@ -1,16 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { eq, lt } from "drizzle-orm";
 import { getDb, type DB } from "@/db/client";
-import { anomalies, meters, users } from "@/db/schema";
+import { anomalies, meters, sessions, users } from "@/db/schema";
 import { isIsoDate } from "@/domain/time";
 import { AppError, toActionError, type ActionResult } from "@/server/errors";
 import { requirePerm, type Actor } from "@/server/context";
 import { currentActor, endSession, setActiveFactory, startSession } from "@/server/auth/session-next";
-import { hashToken, newToken, verifyPassword } from "@/server/auth/password";
+import { hashPassword, hashToken, newToken, verifyPassword } from "@/server/auth/password";
 import { audit } from "@/server/audit";
 import { runAnalysis } from "@/server/services/analysis";
 import { createHeat, updateHeat } from "@/server/services/heats";
@@ -40,23 +40,43 @@ async function withActor<T>(fn: (db: DB, actor: Actor) => Promise<T>): Promise<A
 
 // --- Authentication -------------------------------------------------------
 
+// Login throttling: 5 failures per email and 20 per client address per minute.
+// In-process and bounded; a multi-instance deployment should move this to a shared store.
 const attempts = new Map<string, { n: number; until: number }>();
+let dummyHash: Promise<string> | null = null;
+
+function limited(key: string, max: number) {
+  const a = attempts.get(key);
+  return !!a && a.n >= max && a.until > Date.now();
+}
+
+function recordFailure(key: string) {
+  const now = Date.now();
+  if (attempts.size > 10_000) for (const [k, v] of attempts) if (v.until < now) attempts.delete(k);
+  const cur = attempts.get(key);
+  attempts.set(key, { n: (cur && cur.until > now ? cur.n : 0) + 1, until: now + 60_000 });
+}
 
 export async function loginAction(_prev: ActionResult | null, form: FormData): Promise<ActionResult> {
   const email = String(form.get("email") ?? "").trim().toLowerCase().slice(0, 200);
   const password = String(form.get("password") ?? "").slice(0, 200);
   if (!email || !password) return { ok: false, message: "Enter your email and password." };
-  const a = attempts.get(email);
-  if (a && a.n >= 5 && a.until > Date.now()) return { ok: false, message: "Too many attempts. Wait a minute and try again." };
+  const h = await headers();
+  const ipKey = `ip:${(h.get("x-forwarded-for") ?? h.get("x-real-ip") ?? "local").split(",")[0].trim()}`;
+  const emailKey = `email:${email}`;
+  if (limited(emailKey, 5) || limited(ipKey, 20)) return { ok: false, message: "Too many attempts. Wait a minute and try again." };
   const db = getDb();
   const user = await db.query.users.findFirst({ where: eq(users.email, email) });
-  const ok = user ? await verifyPassword(password, user.passwordHash) : false;
+  // Always run scrypt, so the response time does not reveal whether the email exists.
+  dummyHash ??= hashPassword("not-a-real-password");
+  const ok = await verifyPassword(password, user?.passwordHash ?? (await dummyHash));
   if (!user || !ok) {
-    const cur = attempts.get(email);
-    attempts.set(email, { n: (cur && cur.until > Date.now() ? cur.n : 0) + 1, until: Date.now() + 60_000 });
+    recordFailure(emailKey);
+    recordFailure(ipKey);
     return { ok: false, message: "Email or password is incorrect." };
   }
-  attempts.delete(email);
+  attempts.delete(emailKey);
+  await db.delete(sessions).where(lt(sessions.expiresAt, Date.now()));
   await startSession(user.id);
   await audit(db, null, "auth.login", "user", user.id, { email }, null);
   redirect("/dashboard");

@@ -45,14 +45,12 @@ export async function getRecommendation(db: DB, actor: Actor, id: string) {
       .where(eq(approvals.recommendationId, r.id))
       .limit(1),
   ]);
+  // Read-only: a pending recommendation whose inputs changed is shown as stale.
+  // The database is updated by the write paths and by decideRecommendation.
   let stale = r.status === "STALE";
   if (r.status === "PENDING") {
-    const built = await buildInput(db, actor, r.planId);
-    if (built.hash !== r.inputHash) {
-      stale = true;
-      await db.update(recommendations).set({ status: "STALE" }).where(and(eq(recommendations.id, r.id), eq(recommendations.status, "PENDING")));
-      await audit(db, actor, "recommendation.stale", "recommendation", r.id, { reason: "Inputs changed since the run." });
-    }
+    const built = await buildInput(db, actor, r.planId).catch(() => null);
+    if (!built || built.hash !== r.inputHash) stale = true;
   }
   const [proposedVersion, currentVersion] = await Promise.all([
     db.query.scheduleVersions.findFirst({ where: eq(scheduleVersions.id, r.proposedScheduleId) }),
@@ -100,15 +98,17 @@ export async function decideRecommendation(db: DB, actor: Actor, raw: unknown) {
   if (!r) throw notFound("Recommendation");
   if (r.status !== "PENDING") throw conflict(`This recommendation is already ${r.status.toLowerCase()}.`);
   if (r.version !== input.expectedVersion) throw conflict("A newer version of this recommendation exists. Reload before deciding.");
-  const built = await buildInput(db, actor, r.planId);
-  if (built.hash !== r.inputHash) {
-    await db.update(recommendations).set({ status: "STALE" }).where(and(eq(recommendations.id, r.id), eq(recommendations.status, "PENDING")));
-    await audit(db, actor, "recommendation.stale", "recommendation", r.id, { reason: "Inputs changed before the decision." });
-    throw new AppError("STALE", "Plan, tariff or model inputs changed after this recommendation was made. Re-run the optimiser.");
-  }
   const now = Date.now();
+  let staleNow = false;
   try {
     await db.transaction(async (tx) => {
+      // Freshness is checked inside the write transaction, so no plan, tariff or
+      // model change can land between the check and the decision.
+      const built = await buildInput(tx as unknown as DB, actor, r.planId);
+      if (built.hash !== r.inputHash) {
+        staleNow = true;
+        return;
+      }
       const upd = await tx
         .update(recommendations)
         .set({ status: input.decision })
@@ -144,6 +144,11 @@ export async function decideRecommendation(db: DB, actor: Actor, raw: unknown) {
         note: "Advisory decision recorded. No command was sent to equipment.",
       });
     });
+    if (staleNow) {
+      await db.update(recommendations).set({ status: "STALE" }).where(and(eq(recommendations.id, r.id), eq(recommendations.status, "PENDING")));
+      await audit(db, actor, "recommendation.stale", "recommendation", r.id, { reason: "Inputs changed before the decision." });
+      throw new AppError("STALE", "Plan, tariff or model inputs changed after this recommendation was made. Re-run the optimiser.");
+    }
   } catch (e) {
     if (e instanceof AppError) throw e;
     const msg = String((e as Error)?.message ?? e);

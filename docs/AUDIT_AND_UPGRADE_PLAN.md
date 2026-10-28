@@ -2,7 +2,20 @@
 
 Audit date: 28 Oct 2026. Scope: the whole repository (≈13k lines): domain logic, server services, auth, API routes, schema, UI shell, tests, docs and build.
 
-## 1. Where the project stands
+## Status
+
+Phase 1 (hardening) is done; see section 7. What changed:
+
+- A model refit that moves expected energy by less than 0.5% reuses the stored model, so small data fixes no longer make pending recommendations stale. A material change still does, on the write path.
+- Analysis updates anomalies in place (ids and review status kept), writes only changed heats, and stores a model fit only when the model changes.
+- Meter ingest triggers a debounced background analysis; a settings change re-analyses and marks pending advice stale.
+- Approval freshness and heat-overlap checks run inside the write transaction. Viewing a recommendation no longer writes to the database.
+- Ingest body cap enforced on the stream, ingest rate limit, login timing fixed, login limits per email and per address, expired sessions pruned, HSTS, tariff periods scoped by version, four new indexes (migration `0001`).
+- `error.tsx`, `loading.tsx`, `not-found.tsx`, a CI workflow, a Dockerfile and tests for all of the above (`tests/integration/hardening.test.ts`).
+
+Still open from Phase 1: targeted revalidation instead of `revalidatePath("/", "layout")`, nonce-based CSP (S6), ingest token table (S5), audit hash chain (S9). Rate limits are in-process and trust `X-Forwarded-For`, so they need a shared store and a trusted proxy for multi-instance setups.
+
+## 1. Where the project stood (before the fixes)
 
 The code is in good shape for a hackathon build, and better than most production pilots:
 

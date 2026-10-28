@@ -59,7 +59,8 @@ Sign in with any demo account (password `energyos-demo`, set by `DEMO_PASSWORD`)
 | `DATABASE_URL` | `file:./data/energyos.db` | libSQL/SQLite URL |
 | `SEED_DEMO_USERS` | `true` | Seed demo logins. Set `false` for any shared deployment. |
 | `DEMO_PASSWORD` | `energyos-demo` | Password for seeded demo accounts |
-| `COOKIE_SECURE` | `false` | `true` when served over HTTPS |
+| `COOKIE_SECURE` | `false` | `true` when served over HTTPS (also enables HSTS) |
+| `ANALYSIS_DEBOUNCE_MS` | `60000` | Delay before re-analysing a factory after new meter data arrives through the ingest API |
 
 No secret is ever sent to the browser. Sessions are random opaque tokens stored only as SHA-256 hashes; passwords are scrypt hashes; meter ingest tokens are shown once and stored hashed.
 
