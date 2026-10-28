@@ -59,7 +59,12 @@ Sign in with any demo account (password `energyos-demo`, set by `DEMO_PASSWORD`)
 | `DATABASE_URL` | `file:./data/energyos.db` | libSQL/SQLite URL |
 | `SEED_DEMO_USERS` | `true` | Seed demo logins. Set `false` for any shared deployment. |
 | `DEMO_PASSWORD` | `energyos-demo` | Password for seeded demo accounts |
-| `COOKIE_SECURE` | `false` | `true` when served over HTTPS |
+| `COOKIE_SECURE` | `false` | `true` when served over HTTPS (also enables HSTS) |
+| `ANALYSIS_DEBOUNCE_MS` | `60000` | Delay before re-analysing a factory after new meter data arrives through the ingest API |
+| `ALLOW_PRIVATE_WEBHOOKS` | `false` | Allow alert webhooks to private hosts or plain HTTP (an internal SMS/WhatsApp gateway) |
+| `ENERGYOS_JOBS` | `true` | `false` turns off the background jobs (audit sealing, meter-offline alerts, session cleanup) |
+
+The server refuses to start with `COOKIE_SECURE=true`, demo users and the default demo password.
 
 No secret is ever sent to the browser. Sessions are random opaque tokens stored only as SHA-256 hashes; passwords are scrypt hashes; meter ingest tokens are shown once and stored hashed.
 
@@ -71,7 +76,9 @@ Dashboard (decision loop, KPIs with definitions, power trace with tariff windows
 
 - `GET /api/health` — database check.
 - `GET /api/export/{heats|readings|anomalies|recommendations|audit}?from=YYYY-MM-DD&to=YYYY-MM-DD` — CSV for the signed-in user's active factory (max 31 days).
-- `POST /api/ingest` — read-only meter intake. `Authorization: Bearer eos_…` (issued in Factory settings), body `{"readings":[{"timestamp":"2026-10-22T09:00:00+05:30","power_kw":512.4,"energy_kwh":8.54}]}`. Stored as MEASURED. Refused for simulation factories.
+- `POST /api/ingest` — read-only meter intake. `Authorization: Bearer eos_…` (issued in Factory settings), body `{"readings":[{"timestamp":"2026-10-22T09:00:00+05:30","power_kw":512.4,"energy_kwh":8.54}]}`. Meters that only expose a cumulative register can send `"energy_kwh_total"` instead; interval energy is the difference to the next interval, and a counter that goes backwards (reset, rollover) is detected. Timestamps up to 5 s off the interval grid are snapped (clock drift). Stored as MEASURED. Refused for simulation factories. Max 512 KB, 120 requests/min per token.
+
+Alerts (new high anomaly, recommendation awaiting a decision, advice paused, meter offline, energy drift) appear in Settings and are POSTed as JSON to the factory's webhook with `X-EnergyOS-Timestamp` and `X-EnergyOS-Signature: sha256=HMAC(secret, "timestamp.body")`.
 
 ## Documentation
 

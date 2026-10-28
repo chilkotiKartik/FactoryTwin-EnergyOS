@@ -14,6 +14,7 @@ import { newId } from "../ids";
 import { latestModel, loadTariffVersions, requireFurnace } from "./common";
 import { getPlan, referenceDay } from "./plans";
 import { rangeSummary } from "./analytics";
+import { raiseAlert } from "./alerts";
 
 export interface BuiltInput {
   input: OptimizerInput;
@@ -186,6 +187,7 @@ export async function runOptimization(db: DB, actor: Actor, planId: string): Pro
       });
       await audit(tx, actor, "optimizer.paused", "optimization_run", runId, { planId, dataQuality: dq });
     });
+    await raiseAlert(db, f, { kind: "ADVICE_PAUSED", key: `paused:${planId}:${refDay}:${dq.completeness}`, title: `Advice paused for ${detail.plan.planDate}`, body: message, href: "/meters" });
     return { runId, status: DATA_QUALITY_PAUSE, recommendationId: null, message };
   }
 
@@ -273,6 +275,9 @@ export async function runOptimization(db: DB, actor: Actor, planId: string): Pro
       predictedDelta: p.delta,
     });
   });
+  if (recommendationId) {
+    await raiseAlert(db, f, { kind: "APPROVAL_PENDING", key: `rec:${recommendationId}`, title: `Schedule for ${detail.plan.planDate} awaits a decision`, body: message!, href: `/recommendations/${recommendationId}` });
+  }
   return { runId, status: result.status, recommendationId, message: message! };
 }
 

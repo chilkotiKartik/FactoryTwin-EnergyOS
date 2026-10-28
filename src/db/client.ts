@@ -27,6 +27,11 @@ export function getDb(): DB {
   return globalForDb.__energyosDb.db;
 }
 
+/** The process-wide connection if it is already open; never opens one. */
+export function existingDb(): DB | null {
+  return globalForDb.__energyosDb?.db ?? null;
+}
+
 export function getClient(): Client {
   getDb();
   return globalForDb.__energyosDb!.client;

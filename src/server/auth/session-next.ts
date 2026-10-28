@@ -53,6 +53,12 @@ export async function requireActor(): Promise<Actor> {
   return a;
 }
 
+/** Hash (database id) of this request's session, or null. */
+export async function currentSessionId(): Promise<string | null> {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  return token ? hashToken(token) : null;
+}
+
 export async function setActiveFactory(factoryId: string) {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return;

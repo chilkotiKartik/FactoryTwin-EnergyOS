@@ -44,10 +44,11 @@ Timestamps are UTC epoch ms; money is integer paise; the factory time zone (Asia
 - **SEC** = metered furnace kWh ÷ poured tonnes.
 - **Cost** = Σ interval kWh × rate in force at the interval start (tariff version chosen by timestamp). Energy with no tariff in force is reported as unpriced, never guessed.
 - **Holding** is measured from the power trace: after the melt (≥50% of rated power) a plateau near holding power until tap. Holding energy seen on the meter is already inside the heat's kWh; the kW × minutes estimate is used only when metered energy is missing (no double counting).
-- **Expected energy** = OLS fit of heat kWh on tonnes, cold start and holding minutes over clean history (≥24 heats, ≥90% reading completeness); expected good practice sets holding to zero. Falls back to a physics prior when history is short.
+- **Expected energy** = robust (Huber IRLS) linear fit of heat kWh on tonnes, cold start and holding minutes over clean history (≥24 heats, ≥98% reading completeness), so a few abnormal heats do not move the baseline; expected good practice sets holding to zero. The residual scale (1.4826 × MAD) sets the anomaly threshold. Falls back to a physics prior when history is short. A refit that moves expected energy by less than 0.5% keeps the stored model.
+- **Drift** = two-sided CUSUM on daily mean residuals (k = 0.5σ, h = 5σ, σ ≥ 1%) to catch slow efficiency loss (lining, coil, capacitors) that no single heat flags.
 - **Anomaly rule** (`EXPECTED_VS_ACTUAL_V1`): flag when actual − expected > max(5% of expected, 3 × model RMSE). Severity HIGH ≥ 10%, MEDIUM ≥ 5%. Findings are graded CONFIRMED / STRONG / HYPOTHESIS / INSUFFICIENT; incomplete meter data downgrades to INSUFFICIENT rather than guessing.
 - **Avoided CO₂** = avoided kWh × grid factor. Load shifted in time earns no extra credit.
-- **Verification** compares days per tonne and scales the per-tonne saving to baseline production, so a change in output never shows up as a false saving.
+- **Verification** compares per tonne and scales the per-tonne saving to the average baseline production day, so a change in output never shows up as a false saving. The baseline can be a 1-, 7-, 14- or 30-day period; the SEC change gets a 90% interval (Welch t, or the baseline spread for a single comparison day) and a plain verdict on whether it exceeds normal day-to-day variation.
 
 ## Optimiser
 
@@ -71,9 +72,11 @@ Every run stores a snapshot and SHA-256 fingerprint of its inputs (plan revision
 - Role permissions are enforced in services (`requirePerm`), covered by integration tests.
 - Zod validation on every input; CSV files are re-validated on commit (the preview is never trusted); size and row limits on uploads and exports; CSV export cells are protected against formula injection.
 - Passwords: scrypt. Sessions: random 256-bit tokens, stored as SHA-256, HttpOnly SameSite=Lax cookies, 12-hour expiry. Login is rate-limited per email.
-- Security headers: CSP, X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Policy.
+- Security headers: per-request nonce CSP for pages (`src/proxy.ts`, scripts need the nonce; styles allow inline attributes for charts), a deny-all CSP for the API, HSTS when `COOKIE_SECURE=true`, X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Policy.
+- Accounts: owners add members (new accounts get a one-time password that must be changed at first sign-in), change roles, reset passwords, disable accounts (only accounts that belong to this factory alone) and remove members; the last active owner cannot be removed or demoted. Users change their password and can sign out other devices.
+- Login takes the same time whether or not the email exists; limited per email and per client address.
 - Internal errors are logged on the server and replaced with a generic message for the user.
-- Append-only audit log of sign-ins, edits (with field diffs), imports, analyses, runs, decisions, outcomes, settings changes and exports.
+- Append-only audit log of sign-ins, edits (with field diffs), imports, analyses, runs, decisions, outcomes, settings changes and exports. Events are sealed into a per-factory SHA-256 hash chain; "Verify integrity" on the Audit page recomputes it and names the first altered event. (Removing the newest events cannot be detected by a chain alone; export the head hash regularly for that.)
 
 ## Data modes
 

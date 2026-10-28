@@ -126,6 +126,7 @@ async function clearFactoryData(tx: Tx, factoryId: string) {
   await tx.delete(s.meterReadings).where(eq(s.meterReadings.factoryId, factoryId));
   await tx.delete(s.importBatches).where(eq(s.importBatches.factoryId, factoryId));
   await tx.delete(s.modelFits).where(eq(s.modelFits.factoryId, factoryId));
+  await tx.delete(s.alerts).where(eq(s.alerts.factoryId, factoryId));
   await tx.delete(s.verificationReports).where(eq(s.verificationReports.factoryId, factoryId));
   await tx.delete(s.energyBaselines).where(eq(s.energyBaselines.factoryId, factoryId));
   const tv = await tx.select({ id: s.tariffVersions.id }).from(s.tariffVersions).where(eq(s.tariffVersions.factoryId, factoryId));

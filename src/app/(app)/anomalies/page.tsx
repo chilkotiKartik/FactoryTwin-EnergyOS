@@ -8,6 +8,7 @@ import { requireActor } from "@/server/auth/session-next";
 import { can } from "@/server/permissions";
 import { requirePerm } from "@/server/context";
 import { latestModel, requireFurnace } from "@/server/services/common";
+import { secDrift } from "@/server/services/drift";
 import { ANOMALY_RULE_TEXT } from "@/domain/anomaly";
 import { PageHeader } from "@/components/ui/page-header";
 import { Panel, PanelBody } from "@/components/ui/panel";
@@ -37,7 +38,7 @@ export default async function AnomaliesPage(props: PageProps<"/anomalies">) {
     .orderBy(desc(heats.dayDate), desc(anomalies.variancePct))
     .limit(200);
   const furnace = await requireFurnace(db, actor.factory.id);
-  const { model } = await latestModel(db, actor.factory.id, furnace, actor.factory);
+  const [{ model }, drift] = await Promise.all([latestModel(db, actor.factory.id, furnace, actor.factory), secDrift(db, actor)]);
   const canEdit = can(actor.role, "analysis.run");
 
   return (
@@ -57,8 +58,17 @@ export default async function AnomaliesPage(props: PageProps<"/anomalies">) {
           <div>
             <p className="font-semibold">Model in use</p>
             <p className="text-ink-2">
-              {model.version} · {model.kind === "OLS" ? `fitted on ${model.n} clean heats, R² ${fmt(model.r2, 3)}, RMSE ${fmt(model.rmseKwh, 1)} kWh` : "physics prior (not enough clean history to fit)"}
+              {model.version} · {model.kind === "OLS" ? `robust fit on ${model.n} clean heats, R² ${fmt(model.r2, 3)}, residual scale ${fmt(model.rmseKwh, 1)} kWh` : "physics prior (not enough clean history to fit)"}
             </p>
+          </div>
+          <div className="md:col-span-2">
+            <p className="flex items-center gap-2 font-semibold">
+              Gradual drift (CUSUM on daily residuals)
+              <Badge tone={drift.status === "DRIFT_UP" ? "red" : drift.status === "DRIFT_DOWN" ? "amber" : drift.status === "STABLE" ? "teal" : "neutral"}>
+                {drift.status === "DRIFT_UP" ? "rising" : drift.status === "DRIFT_DOWN" ? "falling" : drift.status === "STABLE" ? "stable" : "not enough data"}
+              </Badge>
+            </p>
+            <p className="text-ink-2">{drift.message}</p>
           </div>
         </PanelBody>
       </Panel>

@@ -30,7 +30,7 @@ export function RecordOutcomeButton({ planId, label }: { planId: string; label: 
   );
 }
 
-export function SaveReportButton(props: { baselineDay: string; comparisonDay: string; assumptions: { operatingDaysPerYear: number; realisationPct: number; capexInr: number; opexInrPerYear: number } }) {
+export function SaveReportButton(props: { baselineDay: string; comparisonDay: string; baselinePeriodDays: number; assumptions: { operatingDaysPerYear: number; realisationPct: number; capexInr: number; opexInrPerYear: number } }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   return (

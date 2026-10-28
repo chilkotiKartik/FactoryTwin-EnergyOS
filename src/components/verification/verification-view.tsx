@@ -146,6 +146,21 @@ export function VerificationView({ v, tz }: { v: Verification; tz: string }) {
         </Panel>
       </div>
 
+      {v.statistics ? (
+        <Panel>
+          <PanelHeader title="Is the change real?" subtitle="Daily SEC compared with normal day-to-day variation (90% interval)." />
+          <PanelBody className="grid gap-2 text-[13px] sm:grid-cols-3">
+            <KV k="Baseline days / comparison days" v={`${v.statistics.baselineDays} / ${v.statistics.comparisonDays}`} />
+            <KV k="Baseline day-to-day spread (CV)" v={v.statistics.baselineSecCvPct === null ? "—" : `${v.statistics.baselineSecCvPct.toFixed(1)}%`} />
+            <KV
+              k="SEC change, 90% interval"
+              v={v.statistics.secChange ? `${v.statistics.secChange.low.toFixed(1)} to ${v.statistics.secChange.high.toFixed(1)} kWh/t` : "—"}
+            />
+            <p className={`sm:col-span-3 ${v.statistics.secChange?.significant ? "text-teal" : "text-ink-2"}`}>{v.statistics.verdict}</p>
+          </PanelBody>
+        </Panel>
+      ) : null}
+
       <Panel>
         <PanelHeader title="Methodology" />
         <PanelBody className="text-[13px] text-ink-2">

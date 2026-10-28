@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt } from "drizzle-orm";
 import type { DB } from "@/db/client";
 import { furnaces, meterReadings, meters, modelFits, tariffPeriods, tariffVersions } from "@/db/schema";
 import type { TariffVersion } from "@/domain/tariff";
@@ -8,7 +8,10 @@ import { notFound } from "../errors";
 export async function loadTariffVersions(db: DB, factoryId: string): Promise<TariffVersion[]> {
   const versions = await db.select().from(tariffVersions).where(eq(tariffVersions.factoryId, factoryId)).orderBy(asc(tariffVersions.version));
   if (!versions.length) return [];
-  const periods = await db.select().from(tariffPeriods);
+  const periods = await db
+    .select()
+    .from(tariffPeriods)
+    .where(inArray(tariffPeriods.tariffVersionId, versions.map((v) => v.id)));
   return versions.map((v) => ({
     id: v.id,
     version: v.version,

@@ -135,9 +135,11 @@ export async function createHeat(db: DB, actor: Actor, raw: unknown) {
   const parsed = heatInputSchema.safeParse(raw);
   if (!parsed.success) throw zodToValidation(parsed.error);
   const input = parsed.data;
-  const v = await validateHeat(db, actor, input, null);
   const id = newId("het");
   await db.transaction(async (tx) => {
+    // Overlap and duplicate checks run inside the write transaction (SQLite
+    // serialises writers), so two tablets cannot create overlapping heats.
+    const v = await validateHeat(tx as unknown as DB, actor, input, null);
     await tx.insert(heats).values({
       id,
       factoryId: actor.factory.id,
@@ -173,27 +175,27 @@ export async function updateHeat(db: DB, actor: Actor, id: string, expectedRevis
   const parsed = heatInputSchema.safeParse(raw);
   if (!parsed.success) throw zodToValidation(parsed.error);
   const input = parsed.data;
-  const v = await validateHeat(db, actor, input, id);
-  const changes = {
-    heatNo: input.heatNo,
-    grade: input.grade,
-    orderCode: input.orderCode || null,
-    chargeKg: input.chargeKg,
-    pouredKg: v.poured,
-    startAt: v.startAt,
-    tapAt: v.tapAt,
-    mouldSet: v.mouldSet,
-    mouldReadyAt: v.mouldReadyAt,
-    manualKwh: v.manualKwh,
-    operatorNotes: input.operatorNotes,
-    dayDate: v.dayDate,
-  };
-  const diff: Record<string, { from: unknown; to: unknown }> = {};
-  for (const [k, val] of Object.entries(changes)) {
-    const before = (existing as Record<string, unknown>)[k];
-    if (before !== val) diff[k] = { from: before, to: val };
-  }
   await db.transaction(async (tx) => {
+    const v = await validateHeat(tx as unknown as DB, actor, input, id);
+    const changes = {
+      heatNo: input.heatNo,
+      grade: input.grade,
+      orderCode: input.orderCode || null,
+      chargeKg: input.chargeKg,
+      pouredKg: v.poured,
+      startAt: v.startAt,
+      tapAt: v.tapAt,
+      mouldSet: v.mouldSet,
+      mouldReadyAt: v.mouldReadyAt,
+      manualKwh: v.manualKwh,
+      operatorNotes: input.operatorNotes,
+      dayDate: v.dayDate,
+    };
+    const diff: Record<string, { from: unknown; to: unknown }> = {};
+    for (const [k, val] of Object.entries(changes)) {
+      const before = (existing as Record<string, unknown>)[k];
+      if (before !== val) diff[k] = { from: before, to: val };
+    }
     const res = await tx
       .update(heats)
       .set({

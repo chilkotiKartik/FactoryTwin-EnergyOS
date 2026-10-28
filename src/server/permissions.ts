@@ -16,6 +16,7 @@ export const PERMISSIONS = [
   "audit.view",
   "factory.configure",
   "demo.reset",
+  "team.manage",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 

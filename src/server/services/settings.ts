@@ -1,12 +1,13 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { DB } from "@/db/client";
-import { factories, furnaces, memberships, users } from "@/db/schema";
+import { factories, furnaces, memberships, recommendations, users } from "@/db/schema";
 import type { Actor } from "../context";
 import { requirePerm } from "../context";
 import { audit } from "../audit";
 import { validation } from "../errors";
 import { requireFurnace } from "./common";
+import { analyseFactory } from "./analysis";
 
 export const settingsSchema = z
   .object({
@@ -71,6 +72,11 @@ export async function updateSettings(db: DB, actor: Actor, raw: unknown) {
         maxHeatsPerDay: v.maxHeatsPerDay,
       })
       .where(eq(furnaces.id, furnace.id));
+    // Process parameters are optimiser inputs: pending advice no longer matches them.
+    await tx.update(recommendations).set({ status: "STALE" }).where(and(eq(recommendations.factoryId, actor.factory.id), eq(recommendations.status, "PENDING")));
     await audit(tx, actor, "factory.configure", "factory", actor.factory.id, { settings: v });
   });
+  // Holding power, rated power and melt time change how traces are segmented.
+  const factory = await db.query.factories.findFirst({ where: eq(factories.id, actor.factory.id) });
+  if (factory) await analyseFactory(db, { ...actor, factory }, "settings.update");
 }

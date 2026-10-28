@@ -27,6 +27,11 @@ export const users = sqliteTable("users", {
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
   passwordHash: text("password_hash").notNull(),
+  /** A disabled user cannot sign in and their sessions stop working. */
+  disabled: integer("disabled", { mode: "boolean" }).notNull().default(false),
+  /** Set when an owner creates the account with a one-time password; cleared on first change. */
+  mustChangePassword: integer("must_change_password", { mode: "boolean" }).notNull().default(false),
+  passwordChangedAt: integer("password_changed_at"),
   createdAt: createdAt(),
 });
 
@@ -64,6 +69,9 @@ export const factories = sqliteTable("factories", {
   maxHoldMinutes: integer("max_hold_minutes").notNull().default(60),
   minCompleteness: real("min_completeness").notNull().default(0.98),
   gridMinutes: integer("grid_minutes").notNull().default(5),
+  /** Outbound alert webhook (HTTPS). Payloads are signed with HMAC-SHA256 using alertWebhookSecret. */
+  alertWebhookUrl: text("alert_webhook_url"),
+  alertWebhookSecret: text("alert_webhook_secret"),
   createdAt: createdAt(),
 });
 
@@ -103,17 +111,24 @@ export const furnaces = sqliteTable("furnaces", {
 });
 
 export const meters = sqliteTable("meters", {
-  id: id(),
-  factoryId: text("factory_id")
-    .notNull()
-    .references(() => factories.id, { onDelete: "cascade" }),
-  furnaceId: text("furnace_id").references(() => furnaces.id),
-  name: text("name").notNull(),
-  model: text("model").notNull().default(""),
-  intervalSeconds: integer("interval_seconds").notNull().default(60),
-  ingestTokenHash: text("ingest_token_hash"),
-  createdAt: createdAt(),
-});
+    id: id(),
+    factoryId: text("factory_id")
+      .notNull()
+      .references(() => factories.id, { onDelete: "cascade" }),
+    furnaceId: text("furnace_id").references(() => furnaces.id),
+    name: text("name").notNull(),
+    model: text("model").notNull().default(""),
+    intervalSeconds: integer("interval_seconds").notNull().default(60),
+    ingestTokenHash: text("ingest_token_hash"),
+    ingestTokenIssuedAt: integer("ingest_token_issued_at"),
+    ingestTokenLastUsedAt: integer("ingest_token_last_used_at"),
+    /** Last cumulative energy register value seen (meters that report a kWh counter). */
+    lastCounterKwh: real("last_counter_kwh"),
+    lastCounterTs: integer("last_counter_ts"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("meters_ingest_token_uq").on(t.ingestTokenHash)],
+);
 
 export const PROVENANCE = ["SIMULATED", "MEASURED", "MANUAL", "IMPORTED_UNVERIFIED"] as const;
 
@@ -348,31 +363,35 @@ export const tariffVersions = sqliteTable(
 );
 
 export const tariffPeriods = sqliteTable("tariff_periods", {
-  id: id(),
-  tariffVersionId: text("tariff_version_id")
-    .notNull()
-    .references(() => tariffVersions.id, { onDelete: "cascade" }),
-  kind: text("kind", { enum: ["PEAK", "SOLAR", "OFFPEAK"] }).notNull(),
-  label: text("label").notNull(),
-  startMin: integer("start_min").notNull(),
-  endMin: integer("end_min").notNull(),
-  ratePaise: integer("rate_paise").notNull(),
-});
+    id: id(),
+    tariffVersionId: text("tariff_version_id")
+      .notNull()
+      .references(() => tariffVersions.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: ["PEAK", "SOLAR", "OFFPEAK"] }).notNull(),
+    label: text("label").notNull(),
+    startMin: integer("start_min").notNull(),
+    endMin: integer("end_min").notNull(),
+    ratePaise: integer("rate_paise").notNull(),
+  },
+  (t) => [index("tariff_periods_version_idx").on(t.tariffVersionId)],
+);
 
 export const modelFits = sqliteTable("model_fits", {
-  id: id(),
-  factoryId: text("factory_id")
-    .notNull()
-    .references(() => factories.id, { onDelete: "cascade" }),
-  version: text("version").notNull(),
-  kind: text("kind").notNull(),
-  coefficients: text("coefficients", { mode: "json" }).$type<Record<string, number>>().notNull(),
-  n: integer("n").notNull(),
-  r2: real("r2"),
-  rmseKwh: real("rmse_kwh"),
-  note: text("note").notNull(),
-  createdAt: createdAt(),
-});
+    id: id(),
+    factoryId: text("factory_id")
+      .notNull()
+      .references(() => factories.id, { onDelete: "cascade" }),
+    version: text("version").notNull(),
+    kind: text("kind").notNull(),
+    coefficients: text("coefficients", { mode: "json" }).$type<Record<string, number>>().notNull(),
+    n: integer("n").notNull(),
+    r2: real("r2"),
+    rmseKwh: real("rmse_kwh"),
+    note: text("note").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("model_fits_factory_time_idx").on(t.factoryId, t.createdAt)],
+);
 
 export const anomalies = sqliteTable(
   "anomalies",
@@ -484,24 +503,26 @@ export const approvals = sqliteTable(
 );
 
 export const executionRecords = sqliteTable("execution_records", {
-  id: id(),
-  factoryId: text("factory_id")
-    .notNull()
-    .references(() => factories.id, { onDelete: "cascade" }),
-  planId: text("plan_id")
-    .notNull()
-    .references(() => productionPlans.id, { onDelete: "cascade" }),
-  scheduleVersionId: text("schedule_version_id")
-    .notNull()
-    .references(() => scheduleVersions.id),
-  recommendationId: text("recommendation_id"),
-  dayDate: text("day_date").notNull(),
-  kind: text("kind", { enum: ["SIMULATED_OUTCOME", "MEASURED_OUTCOME"] }).notNull(),
-  provenance: text("provenance", { enum: PROVENANCE }).notNull(),
-  summary: text("summary", { mode: "json" }).$type<Record<string, unknown>>().notNull(),
-  createdBy: text("created_by"),
-  createdAt: createdAt(),
-});
+    id: id(),
+    factoryId: text("factory_id")
+      .notNull()
+      .references(() => factories.id, { onDelete: "cascade" }),
+    planId: text("plan_id")
+      .notNull()
+      .references(() => productionPlans.id, { onDelete: "cascade" }),
+    scheduleVersionId: text("schedule_version_id")
+      .notNull()
+      .references(() => scheduleVersions.id),
+    recommendationId: text("recommendation_id"),
+    dayDate: text("day_date").notNull(),
+    kind: text("kind", { enum: ["SIMULATED_OUTCOME", "MEASURED_OUTCOME"] }).notNull(),
+    provenance: text("provenance", { enum: PROVENANCE }).notNull(),
+    summary: text("summary", { mode: "json" }).$type<Record<string, unknown>>().notNull(),
+    createdBy: text("created_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("executions_factory_day_idx").on(t.factoryId, t.dayDate)],
+);
 
 export const verificationReports = sqliteTable("verification_reports", {
   id: id(),
@@ -531,6 +552,9 @@ export const auditEvents = sqliteTable(
     entityId: text("entity_id"),
     details: text("details", { mode: "json" }).$type<Record<string, unknown>>().notNull().default({}),
     createdAt: integer("created_at").notNull(),
+    /** Hash chain (per factory): hash = SHA-256(prevHash + canonical event). Set by the sealer. */
+    prevHash: text("prev_hash"),
+    hash: text("hash"),
   },
   (t) => [index("audit_factory_time_idx").on(t.factoryId, t.createdAt)],
 );
@@ -563,3 +587,26 @@ export const energyBaselines = sqliteTable("energy_baselines", {
   createdBy: text("created_by"),
   createdAt: createdAt(),
 });
+
+export const ALERT_KINDS = ["ANOMALY_HIGH", "APPROVAL_PENDING", "ADVICE_PAUSED", "METER_OFFLINE", "SEC_DRIFT", "TEST"] as const;
+export type AlertKind = (typeof ALERT_KINDS)[number];
+
+/** Alerts raised by the system. `dedupeKey` makes raising the same alert twice a no-op. */
+export const alerts = sqliteTable(
+  "alerts",
+  {
+    id: id(),
+    factoryId: text("factory_id")
+      .notNull()
+      .references(() => factories.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: ALERT_KINDS }).notNull(),
+    dedupeKey: text("dedupe_key").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    href: text("href"),
+    deliveredAt: integer("delivered_at"),
+    deliveryError: text("delivery_error"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("alerts_factory_key_uq").on(t.factoryId, t.dedupeKey), index("alerts_factory_time_idx").on(t.factoryId, t.createdAt)],
+);

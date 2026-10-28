@@ -9,7 +9,9 @@ import { requirePerm } from "../context";
 import { audit } from "../audit";
 import { notFound, validation } from "../errors";
 import { newId } from "../ids";
-import { rangeSummary, type RangeSummary } from "./analytics";
+import { dailySeries, rangeSummary, type RangeSummary } from "./analytics";
+import { cvPercent, diffInterval, type DiffInterval } from "@/domain/stats";
+import { addDays } from "@/domain/time";
 import { loadTariffVersions } from "./common";
 
 export const assumptionsSchema = z.object({
@@ -60,7 +62,17 @@ export interface Verification {
   assumptions: Assumptions;
   prediction: Record<string, unknown> | null;
   methodology: string;
+  /** Day-level statistics: is the SEC change larger than normal day-to-day variation? */
+  statistics: {
+    baselineDays: number;
+    comparisonDays: number;
+    baselineSecCvPct: number | null;
+    secChange: DiffInterval | null;
+    verdict: string;
+  };
 }
+
+export const BASELINE_PERIODS = [1, 7, 14, 30] as const;
 
 export async function computeVerification(
   db: DB,
@@ -68,22 +80,31 @@ export async function computeVerification(
   baselineDay: string,
   comparisonDay: string,
   assumptions: Assumptions = DEFAULT_ASSUMPTIONS,
+  opts: { baselinePeriodDays?: number } = {},
 ): Promise<Verification> {
   requirePerm(actor, "view");
   if (!isIsoDate(baselineDay) || !isIsoDate(comparisonDay)) throw validation("Choose valid dates.");
-  const [b, c, versions] = await Promise.all([
-    rangeSummary(db, actor, baselineDay, baselineDay),
+  const period = Math.min(60, Math.max(1, Math.round(opts.baselinePeriodDays ?? 1)));
+  const baselineFrom = addDays(baselineDay, -(period - 1));
+  if (period > 1 && comparisonDay >= baselineFrom && comparisonDay <= baselineDay) throw validation("The comparison day must lie outside the baseline period.");
+  const [b, c, versions, bDaily, cDaily] = await Promise.all([
+    rangeSummary(db, actor, baselineFrom, baselineDay),
     rangeSummary(db, actor, comparisonDay, comparisonDay),
     loadTariffVersions(db, actor.factory.id),
+    dailySeries(db, actor, baselineFrom, baselineDay),
+    dailySeries(db, actor, comparisonDay, comparisonDay),
   ]);
+  // Production days in the baseline (days with poured metal); daily figures are per production day.
+  const bDays = Math.max(1, new Set(b.heats.filter((h) => h.tapAt !== null).map((h) => h.dayDate)).size);
   const sv = savings(
     { energyKwh: b.heatsTapped ? b.energyKwh : null, tonnesPoured: b.tonnesPoured, costPaise: b.heatsTapped ? b.costPaise : null },
     { energyKwh: c.heatsTapped ? c.energyKwh : null, tonnesPoured: c.tonnesPoured, costPaise: c.heatsTapped ? c.costPaise : null },
   );
   const warnings: string[] = [];
   if (!b.heatsTapped || !c.heatsTapped) warnings.push("One of the days has no tapped heats; savings cannot be calculated.");
-  if (Math.abs(b.tonnesPoured - c.tonnesPoured) > 1e-6)
-    warnings.push(`Production differs (${b.tonnesPoured.toFixed(2)} t vs ${c.tonnesPoured.toFixed(2)} t). Compare per-tonne figures, not totals.`);
+  if (Math.abs(b.tonnesPoured / bDays - c.tonnesPoured) > 1e-6)
+    warnings.push(`Production differs (${(b.tonnesPoured / bDays).toFixed(2)} t${bDays > 1 ? " per baseline day" : ""} vs ${c.tonnesPoured.toFixed(2)} t). Compare per-tonne figures, not totals.`);
+  if (bDays > 1) warnings.push(`Baseline is the ${bDays}-day period ${baselineFrom} to ${baselineDay}; totals are for the whole period, daily savings use the average production day.`);
   for (const [label, x] of [["Baseline", b], ["Comparison", c]] as const) {
     if (x.completenessOperating !== null && x.completenessOperating < actor.factory.minCompleteness)
       warnings.push(`${label} day meter data is ${(x.completenessOperating * 100).toFixed(1)}% complete; its energy is understated.`);
@@ -94,7 +115,7 @@ export async function computeVerification(
   // Per-tonne cost saving scaled to the baseline production gives a like-for-like daily rupee saving.
   const perTonneSavingPaise =
     sv.costPerTonneBaseline !== null && sv.costPerTonneComparison !== null ? sv.costPerTonneBaseline - sv.costPerTonneComparison : 0;
-  const dailyInr = (perTonneSavingPaise * b.tonnesPoured) / 100;
+  const dailyInr = (perTonneSavingPaise * (b.tonnesPoured / bDays)) / 100;
   const pb = payback({
     dailyCostSavingInr: dailyInr,
     operatingDaysPerYear: assumptions.operatingDaysPerYear,
@@ -112,7 +133,7 @@ export async function computeVerification(
     if (rec) prediction = { recommendationId: rec.id, version: rec.version, ...rec.predicted };
   }
   // Like-for-like energy saving per tonne, applied to baseline production, for emissions.
-  const kwhSavedLikeForLike = sv.secBaseline !== null && sv.secComparison !== null ? (sv.secBaseline - sv.secComparison) * b.tonnesPoured : null;
+  const kwhSavedLikeForLike = sv.secBaseline !== null && sv.secComparison !== null ? (sv.secBaseline - sv.secComparison) * (b.tonnesPoured / bDays) : null;
   return {
     baseline: side(b),
     comparison: side(c),
@@ -130,6 +151,7 @@ export async function computeVerification(
       })),
     },
     payback: pb,
+    statistics: dayStatistics(bDaily, cDaily),
     assumptions,
     prediction,
     methodology:
@@ -137,15 +159,32 @@ export async function computeVerification(
   };
 }
 
+function dayStatistics(bDaily: { sec: number | null }[], cDaily: { sec: number | null }[]): Verification["statistics"] {
+  const bs = bDaily.map((d) => d.sec).filter((x): x is number => x !== null);
+  const cs = cDaily.map((d) => d.sec).filter((x): x is number => x !== null);
+  const secChange = diffInterval(bs, cs);
+  const verdict =
+    bs.length < 3
+      ? "Single-day baselines cannot separate a real change from normal day-to-day variation. Use a 7- or 14-day baseline."
+      : !secChange
+        ? "Not enough spread in the data to estimate an interval."
+        : secChange.significant
+          ? `The SEC change (${secChange.diff.toFixed(1)} kWh/t, 90% interval ${secChange.low.toFixed(1)} to ${secChange.high.toFixed(1)}) is larger than normal day-to-day variation.`
+          : `The SEC change (${secChange.diff.toFixed(1)} kWh/t) is within normal day-to-day variation (90% interval ${secChange.low.toFixed(1)} to ${secChange.high.toFixed(1)}). More comparison days are needed.`;
+  return { baselineDays: bs.length, comparisonDays: cs.length, baselineSecCvPct: cvPercent(bs), secChange, verdict };
+}
+
 export async function createVerificationReport(
   db: DB,
   actor: Actor,
-  input: { baselineDay: string; comparisonDay: string; assumptions: unknown; title?: string },
+  input: { baselineDay: string; comparisonDay: string; assumptions: unknown; title?: string; baselinePeriodDays?: number },
 ) {
   requirePerm(actor, "verification.create");
   const a = assumptionsSchema.safeParse(input.assumptions);
   if (!a.success) throw validation(a.error.issues[0]?.message ?? "Invalid assumptions.");
-  const v = await computeVerification(db, actor, input.baselineDay, input.comparisonDay, a.data);
+  const period = BASELINE_PERIODS.includes(Number(input.baselinePeriodDays) as 1) ? Number(input.baselinePeriodDays) : 1;
+  const v = await computeVerification(db, actor, input.baselineDay, input.comparisonDay, a.data, { baselinePeriodDays: period });
+  const baselineFrom = addDays(input.baselineDay, -(period - 1));
   if (v.savings.energySavingKwh === null) throw validation("Both days need tapped heats and meter data to create a report.");
   const id = newId("ver");
   const exec = await db.query.executionRecords.findFirst({
@@ -155,9 +194,9 @@ export async function createVerificationReport(
     await tx.insert(s.energyBaselines).values({
       id: newId("bsl"),
       factoryId: actor.factory.id,
-      label: `Baseline ${input.baselineDay}`,
-      method: "Single as-run day under current practice",
-      periodStartDay: input.baselineDay,
+      label: period > 1 ? `Baseline ${baselineFrom} to ${input.baselineDay}` : `Baseline ${input.baselineDay}`,
+      method: period > 1 ? `${period}-day as-run period under current practice` : "Single as-run day under current practice",
+      periodStartDay: baselineFrom,
       periodEndDay: input.baselineDay,
       energyKwh: v.baseline.energyKwh,
       tonnesPoured: v.baseline.tonnesPoured,
