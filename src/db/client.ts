@@ -10,8 +10,13 @@ export function databaseUrl(): string {
   return process.env.DATABASE_URL ?? "file:./data/energyos.db";
 }
 
-export function createDb(url: string): { client: Client; db: DB } {
-  const client = createClient({ url });
+/** Auth token for a hosted libSQL / Turso database. Not used for file: URLs. */
+export function databaseAuthToken(): string | undefined {
+  return process.env.DATABASE_AUTH_TOKEN || undefined;
+}
+
+export function createDb(url: string, authToken: string | undefined = databaseAuthToken()): { client: Client; db: DB } {
+  const client = createClient(url.startsWith("file:") ? { url } : { url, authToken });
   return { client, db: drizzle(client, { schema }) };
 }
 
@@ -21,8 +26,11 @@ export function getDb(): DB {
   if (!globalForDb.__energyosDb || globalForDb.__energyosDb.url !== url) {
     const { client, db } = createDb(url);
     globalForDb.__energyosDb = { client, db, url };
-    void client.execute("PRAGMA foreign_keys = ON");
-    void client.execute("PRAGMA busy_timeout = 5000");
+    // Per-connection settings for a local file. A hosted database manages its own, and may refuse them;
+    // never let that become an unhandled rejection.
+    if (url.startsWith("file:")) {
+      for (const pragma of ["PRAGMA foreign_keys = ON", "PRAGMA busy_timeout = 5000"]) client.execute(pragma).catch((e) => console.warn(`[energyos] ${pragma} failed`, e));
+    }
   }
   return globalForDb.__energyosDb.db;
 }

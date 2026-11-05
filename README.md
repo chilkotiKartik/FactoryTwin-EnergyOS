@@ -62,6 +62,7 @@ Sign in with any demo account (password `energyos-demo`, set by `DEMO_PASSWORD`)
 | `COOKIE_SECURE` | `false` | `true` when served over HTTPS (also enables HSTS) |
 | `ANALYSIS_DEBOUNCE_MS` | `60000` | Delay before re-analysing a factory after new meter data arrives through the ingest API |
 | `ALLOW_PRIVATE_WEBHOOKS` | `false` | Allow alert webhooks to private hosts or plain HTTP (an internal SMS/WhatsApp gateway) |
+| `DATABASE_AUTH_TOKEN` | – | Token for a hosted libSQL / Turso `DATABASE_URL` (ignored for local files) |
 | `ENERGYOS_JOBS` | `true` | `false` turns off the background jobs (audit sealing, meter-offline alerts, session cleanup) |
 
 The server refuses to start with `COOKIE_SECURE=true`, demo users and the default demo password.
@@ -70,7 +71,7 @@ No secret is ever sent to the browser. Sessions are random opaque tokens stored 
 
 ## Screens
 
-Dashboard (decision loop, KPIs with definitions, power trace with tariff windows, SEC by heat, trends) · Heat log (filters, tablet quick entry, edit with revision check) · Heat detail (expected vs actual, trace, findings, evidence level) · Meter data (quality, gaps, unlinked energy, CSV preview → commit, readings) · Anomalies · Schedule optimiser (plan inputs, Gantt current vs recommended, constraint checks, infeasibility explanation, run history) · Approvals · Verification (baseline vs comparison per tonne, payback, avoided CO₂, printable reports) · Tariffs (versioned) · Reports & exports (CSV with metadata, printable daily report) · Audit log · Evidence & assumptions · Factory settings (process parameters, team, meter ingest token) · Scenario control.
+Dashboard (decision loop, KPIs with definitions, power trace with tariff windows, SEC by heat, trends) · Heat log (filters, tablet quick entry with “Now” buttons, offline queue, edit with revision check) · Heat detail (expected vs actual, trace, findings, evidence level) · Meter data (quality, gaps, unlinked energy, CSV preview → commit, readings) · Anomalies · Schedule optimiser (plan inputs, Gantt current vs recommended, constraint checks, infeasibility explanation, run history, optional reordering of heats within an order, shared-connection demand cap with peak kVA, and a what-if panel that saves nothing) · Approvals · Verification (baseline vs comparison per tonne, payback, avoided CO₂, printable reports) · Tariffs (versioned) · Reports & exports (CSV with metadata, printable daily report) · Audit log · Evidence & assumptions · Factory settings (process parameters, team, meter ingest token) · Scenario control.
 
 ## API
 
@@ -79,6 +80,12 @@ Dashboard (decision loop, KPIs with definitions, power trace with tariff windows
 - `POST /api/ingest` — read-only meter intake. `Authorization: Bearer eos_…` (issued in Factory settings), body `{"readings":[{"timestamp":"2026-10-22T09:00:00+05:30","power_kw":512.4,"energy_kwh":8.54}]}`. Meters that only expose a cumulative register can send `"energy_kwh_total"` instead; interval energy is the difference to the next interval, and a counter that goes backwards (reset, rollover) is detected. Timestamps up to 5 s off the interval grid are snapped (clock drift). Stored as MEASURED. Refused for simulation factories. Max 512 KB, 120 requests/min per token.
 
 Alerts (new high anomaly, recommendation awaiting a decision, advice paused, meter offline, energy drift) appear in Settings and are POSTed as JSON to the factory's webhook with `X-EnergyOS-Timestamp` and `X-EnergyOS-Signature: sha256=HMAC(secret, "timestamp.body")`.
+
+## Tablet use, offline and languages
+
+- **Installable app.** A web app manifest and a small service worker let a tablet install EnergyOS. The service worker caches only an offline page and hashed build assets, never signed-in pages, because tablets are shared.
+- **Offline heat logging.** If the connection drops while a heat is being logged, the heat is kept on the device (IndexedDB) and sent, oldest first, when the connection returns. A queued heat belongs to the user and factory that entered it and is only ever sent by them. Heats the server refuses (for example an overlap) stay visible with the reason until discarded. The page that holds the form must already be open: opening a new page needs the network.
+- **Languages.** English, Hindi and Marathi for navigation, heat entry and sync messages (switch in the top bar). The other screens are still English, and the Hindi/Marathi text is a first draft that a native speaker should review.
 
 ## Documentation
 
