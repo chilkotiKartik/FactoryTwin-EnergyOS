@@ -13,9 +13,9 @@ Audit date: 28 Oct 2026. Scope: the whole repository (≈13k lines): domain logi
 - Alerts: high anomaly, approval pending, advice paused, meter offline, energy drift; deduplicated, shown in Settings, delivered to a signed webhook with SSRF guards.
 - Model: robust Huber regression; CUSUM drift detection.
 - Verification: multi-day baselines with 90% intervals and a plain verdict.
-- Ops: CI workflow, Dockerfile, error/loading/not-found pages, four new indexes and two migrations.
+- Ops: CI workflow, error/loading/not-found pages, four new indexes and two migrations.
 
-**Added after the audit (Nov 2026):** patch-level dependency bumps; ingest authentication-failure throttling per address with a bounded limiter; 1-minute refinement of the optimiser; what-if panel; opt-in heat reordering within an order; shared-connection demand cap, other-plant load and peak kVA; sequential multi-furnace solver (domain level); model-term explanation on the heat page; installable tablet app with offline heat queue and “Now” buttons; Hindi and Marathi for navigation and heat entry; hosted-database configuration; service tests for exports, tariffs, plans and background analysis (83% → 87% lines).
+**Added after the audit (Nov 2026):** patch-level dependency bumps; ingest authentication-failure throttling per address with a bounded limiter; 1-minute refinement of the optimiser; what-if panel; opt-in heat reordering within an order; shared-connection demand cap, other-plant load and peak kVA; model-term explanation on the heat page; installable tablet app with offline heat queue and “Now” buttons; Hindi and Marathi for navigation and heat entry; hosted-database configuration; service tests for exports, tariffs, plans and background analysis (83% → 87% lines).
 
 **Measured and deliberately not built:** a daily rollup table. Dashboard queries are 16–131 ms at about 124 days of one-minute data (see docs/DEPLOYMENT.md, Capacity), so a rollup would add staleness risk for no visible gain yet. Raw-data retention was also not built: deleting readings is irreversible and the volume (about 525,000 rows per meter per year) is small.
 
@@ -195,7 +195,6 @@ Fix: move both checks inside the transaction (SQLite serialises writers, so `BEG
 
 - **CI (GitHub Actions):** install → lint → typecheck → unit and integration tests → build → Playwright e2e on every PR. Nothing runs automatically today.
 - **Coverage:** raise from 49.6% lines / 31% branches. Untested areas include `domain/anomaly.ts`, `domain/model.ts`, `domain/simulator.ts`, `domain/time.ts` (DST paths), auth/session code and most page-level logic. Add property-based tests (fast-check) for tariff wrap-around, gap detection and the optimiser.
-- **Container:** commit the Dockerfile outlined in `docs/DEPLOYMENT.md` (multi-stage, non-root user, `next build` with `output: "standalone"`), and run migrations as a separate step instead of on every container start.
 - **Backups:** scheduled `sqlite3 .backup` or Litestream to object storage; document and test a restore.
 - **Observability:** structured JSON logs with a request ID, OpenTelemetry traces for server actions, an error tracker (Sentry), and a richer health check (last ingest per meter, analysis lag).
 - **Background jobs:** a small job runner (a DB-backed queue is enough at first) for analysis, rollups, notifications and session cleanup. Several fixes above depend on it.
@@ -210,7 +209,7 @@ Fix: move both checks inside the transaction (SQLite serialises writers, so `BEG
 1. Pin the model per plan (2.1) and incremental analysis with anomaly upserts (2.2).
 2. Move freshness and overlap checks into transactions (2.4); make page renders read-only (2.5).
 3. Security S1–S5 and S8; session cleanup; missing indexes.
-4. CI pipeline, `error.tsx` / `loading.tsx`, Dockerfile, backups.
+4. CI pipeline, `error.tsx` / `loading.tsx`, backups.
 
 **Phase 2 — Pilot-ready (3–6 weeks)**
 1. Edge gateway (Modbus/MQTT) with counter-register support and offline buffering (5.1).

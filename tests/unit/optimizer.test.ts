@@ -166,8 +166,7 @@ describe("heat reordering (opt-in)", () => {
   });
 });
 
-import { furnaceLoadProfile, optimiseSite } from "@/domain/optimizer";
-import { DECK_MOULD_READY } from "@/domain/scenarios";
+import { furnaceLoadProfile } from "@/domain/optimizer";
 
 describe("shared-connection demand cap", () => {
   const PF = 0.95;
@@ -207,33 +206,5 @@ describe("shared-connection demand cap", () => {
     expect(r.status).toBe("INFEASIBLE");
     expect(r.blocking[0].constraint).toBe("Site demand cap");
     expect(r.blocking[0].detail).toMatch(/relaxed/);
-  });
-
-  it("schedules two furnaces under one shared cap", () => {
-    const six = DECK_MOULD_READY.slice(0, 6);
-    const a = deckInput({}, six);
-    const b = deckInput({}, six.map((x) => (x === null ? null : x + 30)));
-    b.heats = b.heats.map((h) => ({ ...h, key: `b-${h.key}`, orderId: "ob" }));
-    b.orders = [{ id: "ob", code: "PO-B", requiredTonnes: 3, dueMin: 1320 }];
-    a.heats = a.heats.map((h) => ({ ...h, orderId: "oa" }));
-    a.orders = [{ id: "oa", code: "PO-A", requiredTonnes: 3, dueMin: 1320 }];
-    const site = { capKw: 1000, baseLoadKw: flat(0), powerFactor: PF };
-    const res = optimiseSite([a, b], site);
-    expect(res.status).toBe("OPTIMAL");
-    expect(res.furnaces).toHaveLength(2);
-    const pa = furnaceLoadProfile(a, res.furnaces[0].recommended!.items);
-    const pb = furnaceLoadProfile(b, res.furnaces[1].recommended!.items);
-    for (let m = 0; m < 1440; m++) expect(pa[m] + pb[m]).toBeLessThanOrEqual(1000 + 1e-6);
-    expect(res.peak15Kva!).toBeLessThanOrEqual(1000 / PF + 1e-6);
-    // Without the shared cap the two furnaces would otherwise be free to overlap fully.
-    expect(res.furnaces.every((f) => f.recommended!.feasible)).toBe(true);
-  });
-
-  it("reports infeasible when a later furnace cannot fit under the cap", () => {
-    // 2 × 12 heats of ~45 min cannot share one 600 kW connection (no two melts may overlap) inside 06:00–22:00.
-    const a = deckInput();
-    const res = optimiseSite([a, a], { capKw: 600, baseLoadKw: flat(0), powerFactor: PF });
-    expect(res.status).toBe("INFEASIBLE");
-    expect(res.peak15Kva).toBeNull();
   });
 });

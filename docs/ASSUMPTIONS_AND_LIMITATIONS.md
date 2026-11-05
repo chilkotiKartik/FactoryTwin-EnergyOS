@@ -41,7 +41,7 @@ The app recomputes the deck's illustrative figures from its own synthetic data (
 
 - No field validation. All Foundry A data is synthetic.
 - Predictions are not savings. Savings appear only after an outcome is recorded and verified, and they inherit the label of the data (SIMULATED in the demo).
-- The optimiser is exact for its stated model, not for the real plant. It does not model cranes, ladles or labour. Reordering is limited to heats of the same order and is a bounded search. Demand is modelled as one furnace plus two flat levels of other load, billed on 15-minute block averages; kVAh billing and a time-varying other load are not modelled. Several furnaces are scheduled only in a domain-level priority heuristic, not in the application.
+- The optimiser is exact for its stated model, not for the real plant. It does not model cranes, ladles or labour. Reordering is limited to heats of the same order and is a bounded search. Demand is modelled as one furnace plus two flat levels of other load, billed on 15-minute block averages; kVAh billing and a time-varying other load are not modelled.
 - The expected-energy model is linear in tonnes, cold start and holding minutes. It ignores charge mix, superheat, lining wear and lid practice.
 - Holding detection depends on meter resolution; 1-minute data is assumed.
 - No integration with a real meter, MES or ERP has been tested. The ingest API has been tested only with synthetic requests in automated tests.

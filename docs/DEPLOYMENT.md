@@ -1,6 +1,6 @@
 # Deployment
 
-EnergyOS is a standard Next.js Node server with a SQLite file. It needs a persistent disk, so use a VM, container host or PaaS with a volume (serverless platforms with an ephemeral filesystem are not suitable unless `DATABASE_URL` points to a hosted libSQL/Turso database).
+EnergyOS is a standard Next.js Node server with a SQLite file. It needs a persistent disk, so use a VM or a host with a persistent disk (serverless platforms with an ephemeral filesystem are not suitable unless `DATABASE_URL` points to a hosted libSQL/Turso database).
 
 ## Single server
 
@@ -16,15 +16,12 @@ pnpm start            # listens on :3000; put it behind a TLS reverse proxy (ngi
 
 With `SEED_DEMO_USERS="false"` no logins are created; create the first owner account directly in the database or re-enable demo seeding on a private instance.
 
-## Container
+## Process manager
 
-A `Dockerfile` is included. It runs as a non-root user, stores the database on the `/data` volume and has a health check.
+Run the production server under a process manager so it restarts on failure, for example systemd or pm2:
 
 ```bash
-docker build -t energyos .
-docker volume create energyos
-docker run --rm -v energyos:/data energyos pnpm db:setup     # migrations, once per release
-docker run -d -p 3000:3000 -v energyos:/data energyos
+pm2 start "pnpm start" --name energyos
 ```
 
 Background analysis after meter ingest runs inside the server process, so run a single instance (or move the job to a shared queue first).

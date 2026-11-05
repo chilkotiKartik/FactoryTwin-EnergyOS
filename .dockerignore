@@ -1,9 +1,0 @@
-node_modules
-.next
-data
-coverage
-test-results
-playwright-report
-.env*
-!.env.example
-.git
