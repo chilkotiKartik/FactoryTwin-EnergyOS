@@ -56,3 +56,30 @@ describe("robust model", () => {
     expect(m.note).toMatch(/down-weighted/);
   });
 });
+
+import { explainPrediction, expectedGoodPracticeKwh, predictKwh, type EnergyModel } from "@/domain/model";
+
+describe("explainPrediction", () => {
+  const m: EnergyModel = {
+    version: "t",
+    kind: "OLS",
+    coefficients: { intercept: 10, perTonne: 600, coldStart: 50, perHoldMinute: 1 },
+    n: 100,
+    r2: 0.9,
+    rmseKwh: 10,
+    note: "",
+  };
+  it("terms add up to the prediction and the good-practice expectation", () => {
+    const f = { chargeTonnes: 0.5, coldStart: true, holdMinutes: 45 };
+    const x = explainPrediction(m, f, 400);
+    expect(x.terms.reduce((s, t) => s + t.kwh, 0)).toBeCloseTo(predictKwh(m, f), 9);
+    expect(x.expectedGoodPracticeKwh).toBeCloseTo(expectedGoodPracticeKwh(m, f), 9);
+    expect(x.rangeKwh!.high - x.rangeKwh!.low).toBeCloseTo(2 * 1.96 * 10, 9);
+    expect(x.zScore).toBeCloseTo((400 - 360) / 10, 9);
+  });
+  it("has no range or z-score without a fitted scale", () => {
+    const x = explainPrediction({ ...m, rmseKwh: null }, { chargeTonnes: 1, coldStart: false, holdMinutes: 0 }, 500);
+    expect(x.rangeKwh).toBeNull();
+    expect(x.zScore).toBeNull();
+  });
+});
