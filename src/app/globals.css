@@ -70,7 +70,7 @@
   --color-blue: var(--blue);
   --color-blue-soft: var(--blue-soft);
   --color-violet: var(--violet);
-  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-plex-sans), var(--font-deva), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, monospace;
 }
 

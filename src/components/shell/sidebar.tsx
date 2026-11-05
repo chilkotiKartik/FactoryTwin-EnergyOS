@@ -23,8 +23,10 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { useT } from "@/lib/i18n/context";
+import type { MessageKey } from "@/lib/i18n/messages";
 
-type Item = { href: string; label: string; icon: React.ComponentType<{ className?: string }>; badge?: number };
+type Item = { href: string; label: MessageKey; icon: React.ComponentType<{ className?: string }>; badge?: number };
 
 export function Sidebar({ factoryName, isSimulation, pendingApprovals, canSeeAudit }: { factoryName: string; isSimulation: boolean; pendingApprovals: number; canSeeAudit: boolean }) {
   const pathname = usePathname();
@@ -33,42 +35,43 @@ export function Sidebar({ factoryName, isSimulation, pendingApprovals, canSeeAud
   const open = openAt === pathname;
   const setOpen = (v: boolean) => setOpenAt(v ? pathname : null);
 
-  const groups: { title: string; items: Item[] }[] = [
-    { title: "Overview", items: [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }] },
+  const { t } = useT();
+  const groups: { title: MessageKey; items: Item[] }[] = [
+    { title: "nav.overview", items: [{ href: "/dashboard", label: "nav.dashboard", icon: LayoutDashboard }] },
     {
-      title: "Operations",
+      title: "nav.operations",
       items: [
-        { href: "/heats", label: "Heat log", icon: Flame },
-        { href: "/meters", label: "Meter data", icon: Gauge },
-        { href: "/anomalies", label: "Anomalies", icon: TriangleAlert },
+        { href: "/heats", label: "nav.heats", icon: Flame },
+        { href: "/meters", label: "nav.meters", icon: Gauge },
+        { href: "/anomalies", label: "nav.anomalies", icon: TriangleAlert },
       ],
     },
     {
-      title: "Decisions",
+      title: "nav.decisions",
       items: [
-        { href: "/optimizer", label: "Schedule optimiser", icon: CalendarClock },
-        { href: "/recommendations", label: "Approvals", icon: ClipboardCheck, badge: pendingApprovals },
-        { href: "/verification", label: "Verification", icon: BadgeCheck },
+        { href: "/optimizer", label: "nav.optimizer", icon: CalendarClock },
+        { href: "/recommendations", label: "nav.approvals", icon: ClipboardCheck, badge: pendingApprovals },
+        { href: "/verification", label: "nav.verification", icon: BadgeCheck },
       ],
     },
     {
-      title: "Records",
+      title: "nav.records",
       items: [
-        { href: "/tariffs", label: "Tariffs", icon: IndianRupee },
-        { href: "/reports", label: "Reports & exports", icon: FileText },
-        ...(canSeeAudit ? [{ href: "/audit", label: "Audit log", icon: History }] : []),
-        { href: "/evidence", label: "Evidence & assumptions", icon: BookOpen },
-        { href: "/settings", label: "Factory settings", icon: Settings },
+        { href: "/tariffs", label: "nav.tariffs", icon: IndianRupee },
+        { href: "/reports", label: "nav.reports", icon: FileText },
+        ...(canSeeAudit ? [{ href: "/audit", label: "nav.audit" as const, icon: History }] : []),
+        { href: "/evidence", label: "nav.evidence", icon: BookOpen },
+        { href: "/settings", label: "nav.settings", icon: Settings },
       ],
     },
-    ...(isSimulation ? [{ title: "Demo", items: [{ href: "/demo", label: "Scenario control", icon: FlaskConical }] }] : []),
+    ...(isSimulation ? [{ title: "nav.demo" as const, items: [{ href: "/demo", label: "nav.scenario" as const, icon: FlaskConical }] }] : []),
   ];
 
   const nav = (
     <nav aria-label="Main" className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 pb-6">
       {groups.map((g) => (
         <div key={g.title}>
-          <p className="px-2 pb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-shell-muted">{g.title}</p>
+          <p className="px-2 pb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-shell-muted">{t(g.title)}</p>
           <ul className="flex flex-col gap-0.5">
             {g.items.map((it) => {
               const active = pathname === it.href || pathname.startsWith(`${it.href}/`);
@@ -87,7 +90,7 @@ export function Sidebar({ factoryName, isSimulation, pendingApprovals, canSeeAud
                     )}
                   >
                     <Icon className={cn("size-4", active ? "text-amber-mark" : "text-shell-muted")} />
-                    <span className="flex-1">{it.label}</span>
+                    <span className="flex-1">{t(it.label)}</span>
                     {it.badge ? (
                       <span className="num rounded bg-amber-mark px-1.5 text-[11px] font-semibold text-white" aria-label={`${it.badge} pending`}>
                         {it.badge}
@@ -118,7 +121,7 @@ export function Sidebar({ factoryName, isSimulation, pendingApprovals, canSeeAud
   );
 
   const foot = (
-    <p className="border-t border-shell-2 px-5 py-3 text-[11px] leading-snug text-shell-muted">Advisory only. No command is sent to plant equipment.</p>
+    <p className="border-t border-shell-2 px-5 py-3 text-[11px] leading-snug text-shell-muted">{t("nav.advisory")}</p>
   );
 
   return (
@@ -127,7 +130,7 @@ export function Sidebar({ factoryName, isSimulation, pendingApprovals, canSeeAud
         type="button"
         onClick={() => setOpen(true)}
         className="no-print fixed bottom-4 left-4 z-40 grid size-11 place-items-center rounded-full bg-shell text-white shadow-lg lg:hidden"
-        aria-label="Open navigation"
+        aria-label={t("nav.open")}
         aria-expanded={open}
       >
         <Menu className="size-5" />
@@ -151,7 +154,7 @@ export function Sidebar({ factoryName, isSimulation, pendingApprovals, canSeeAud
               exit={{ x: -280 }}
               transition={{ type: "tween", duration: 0.18 }}
             >
-              <button type="button" onClick={() => setOpen(false)} className="absolute right-3 top-4 rounded p-1 text-shell-ink hover:bg-shell-2" aria-label="Close navigation">
+              <button type="button" onClick={() => setOpen(false)} className="absolute right-3 top-4 rounded p-1 text-shell-ink hover:bg-shell-2" aria-label={t("nav.close")}>
                 <X className="size-5" />
               </button>
               {brand}

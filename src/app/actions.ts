@@ -28,6 +28,7 @@ import { updateSettings } from "@/server/services/settings";
 
 import { DAY_COOKIE } from "@/lib/constants";
 import { clientAddress, createRateLimiter } from "@/server/ratelimit";
+import { isLocale, LOCALE_COOKIE } from "@/lib/i18n/messages";
 
 async function withActor<T>(fn: (db: DB, actor: Actor) => Promise<T>, opts: { allowPendingPassword?: boolean; readOnly?: boolean } = {}): Promise<ActionResult<T>> {
   try {
@@ -267,4 +268,12 @@ export async function verifyAuditAction() {
     requirePerm(a, "audit.view");
     return verifyAuditChain(db, a.factory.id);
   });
+}
+
+/** Remember the display language for this browser. A cookie only: no account data is involved. */
+export async function setLocaleAction(locale: string): Promise<ActionResult> {
+  if (!isLocale(locale)) return { ok: false, code: "VALIDATION", message: "Unknown language." };
+  (await cookies()).set(LOCALE_COOKIE, locale, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax", httpOnly: false, secure: process.env.COOKIE_SECURE === "true" });
+  revalidatePath("/", "layout");
+  return { ok: true };
 }
