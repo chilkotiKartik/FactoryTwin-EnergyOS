@@ -18,13 +18,15 @@
  *                charge ≤ furnace capacity; heats ≤ max heats per day
  *                poured tonnes per order ≥ required tonnes
  *
- * Solved exactly by dynamic programming over (heat index, tap minute). The result
- * is optimal for this model on this start grid with this heat sequence. It is not
+ * Solved exactly by dynamic programming over (heat index, tap minute) on the start
+ * grid, then refined at 1-minute resolution around that optimum and around current
+ * practice. The result is optimal for this model on the grid and at least as good
+ * as any schedule within one grid step of it, for this heat sequence. It is not
  * a claim of global optimality for the real plant.
  */
 
 export const SOLVER_ID = "dp-grid";
-export const SOLVER_VERSION = "1.0.0";
+export const SOLVER_VERSION = "1.1.0";
 
 export interface PlanHeat {
   key: string;
@@ -423,6 +425,74 @@ export function earliestSchedule(input: OptimizerInput): { starts: number[] | nu
   return { starts, reasons, failure: null };
 }
 
+/**
+ * Exact dynamic programme over (heat index, tap minute). With `cand` null the start
+ * times are the grid; otherwise each heat may start only at the listed minutes.
+ */
+function solveDp(input: OptimizerInput, cand: number[][] | null): { starts: number[] | null; explored: number } {
+  const pre = prefix(input.pricePaise);
+  const g = input.gridMinutes;
+  const n = input.heats.length;
+  const H = 1441;
+  const layers: (Cell | undefined)[][] = [];
+  let explored = 0;
+  const fromMin = Math.ceil(input.furnace.availableFromMin / g) * g;
+  const toMin = Math.min(input.furnace.availableToMin, 1440);
+  const fromAny = cand ? input.furnace.availableFromMin : fromMin;
+
+  for (let k = 0; k < n; k++) {
+    const h = input.heats[k];
+    const layer: (Cell | undefined)[] = new Array(H);
+    const due = Math.min(orderDue(input, h.orderId), input.deadlineMin);
+    const prevStates: { tap: number; cell: Cell | null }[] =
+      k === 0
+        ? [{ tap: -1, cell: null }]
+        : layers[k - 1].map((c, tap) => (c ? { tap, cell: c } : null)).filter((x): x is { tap: number; cell: Cell } => x !== null);
+    for (const { tap: prevTap, cell } of prevStates) {
+      const starts: Iterable<number> = cand
+        ? cand[k].filter((S) => S >= (k === 0 ? fromAny : Math.max(fromAny, prevTap + input.process.turnaroundMinutes)))
+        : (function* () {
+            const earliest = k === 0 ? fromMin : Math.max(fromMin, Math.ceil((prevTap + input.process.turnaroundMinutes) / g) * g);
+            for (let S = earliest; S <= toMin; S += g) yield S;
+          })();
+      for (const S of starts) {
+        explored++;
+        if (S > toMin) break;
+        const cold = k === 0 || S - prevTap > input.process.coldGapMinutes;
+        const melt = meltMinutesFor(input, k, cold);
+        const M = S + melt;
+        const tap = Math.max(M, h.mouldReadyMin ?? -Infinity);
+        if (tap > toMin) break; // later starts only finish later
+        if (tap > due) break;
+        const hold = tap - M;
+        if (hold > input.process.maxHoldMinutes) continue;
+        if (overlapsDowntime(input, S, tap)) continue;
+        const meltKwh = cold ? input.meltKwh[k].cold : input.meltKwh[k].warm;
+        const c = (priceSum(pre, S, M) * meltKwh) / melt + (priceSum(pre, M, tap) * input.process.holdingKw) / 60;
+        const cc = { cost: (cell?.cost ?? 0) + c, hold: (cell?.hold ?? 0) + hold, prevTap, start: S };
+        if (better(cc, layer[tap])) layer[tap] = cc;
+      }
+    }
+    layers.push(layer);
+  }
+
+  const last = layers[n - 1];
+  let bestTap = -1;
+  for (let tap = 0; tap < H; tap++) {
+    const c = last[tap];
+    if (c && (bestTap === -1 || better(c, last[bestTap]))) bestTap = tap;
+  }
+  if (bestTap === -1) return { starts: null, explored };
+  const starts = new Array<number>(n);
+  let tap = bestTap;
+  for (let k = n - 1; k >= 0; k--) {
+    const c = layers[k][tap]!;
+    starts[k] = c.start;
+    tap = c.prevTap;
+  }
+  return { starts, explored };
+}
+
 export function optimise(input: OptimizerInput): OptimizerResult {
   const t0 = performance.now();
   const warnings: string[] = [];
@@ -430,7 +500,7 @@ export function optimise(input: OptimizerInput): OptimizerResult {
   if (!current.feasible) warnings.push("The current-practice schedule breaks at least one hard limit; see its checks.");
   const optimalityNote =
     "Exact optimum of the stated model: fixed heat sequence, start times on a " +
-    `${input.gridMinutes}-minute grid, expected-energy model for melting, ${input.process.holdingKw} kW holding. Not a claim of global optimality for the real plant.`;
+    `${input.gridMinutes}-minute grid refined to 1-minute starts around the grid optimum, expected-energy model for melting, ${input.process.holdingKw} kW holding. Not a claim of global optimality for the real plant.`;
 
   const blockingPre = preChecks(input);
   if (blockingPre.length) {
@@ -449,51 +519,32 @@ export function optimise(input: OptimizerInput): OptimizerResult {
     };
   }
 
-  const pre = prefix(input.pricePaise);
-  const g = input.gridMinutes;
   const n = input.heats.length;
-  const H = 1441;
-  const layers: (Cell | undefined)[][] = [];
   let explored = 0;
-  const fromMin = Math.ceil(input.furnace.availableFromMin / g) * g;
-  const toMin = Math.min(input.furnace.availableToMin, 1440);
-
-  for (let k = 0; k < n; k++) {
-    const h = input.heats[k];
-    const layer: (Cell | undefined)[] = new Array(H);
-    const due = Math.min(orderDue(input, h.orderId), input.deadlineMin);
-    const prevStates: { tap: number; cell: Cell | null }[] =
-      k === 0
-        ? [{ tap: -1, cell: null }]
-        : layers[k - 1].map((c, tap) => (c ? { tap, cell: c } : null)).filter((x): x is { tap: number; cell: Cell } => x !== null);
-    for (const { tap: prevTap, cell } of prevStates) {
-      const earliest = k === 0 ? fromMin : Math.max(fromMin, Math.ceil((prevTap + input.process.turnaroundMinutes) / g) * g);
-      for (let S = earliest; S <= toMin; S += g) {
-        explored++;
-        const cold = k === 0 || S - prevTap > input.process.coldGapMinutes;
-        const melt = meltMinutesFor(input, k, cold);
-        const M = S + melt;
-        const tap = Math.max(M, h.mouldReadyMin ?? -Infinity);
-        if (tap > toMin) break; // later starts only finish later
-        if (tap > due) break;
-        const hold = tap - M;
-        if (hold > input.process.maxHoldMinutes) continue;
-        if (overlapsDowntime(input, S, tap)) continue;
-        const meltKwh = cold ? input.meltKwh[k].cold : input.meltKwh[k].warm;
-        const c = (priceSum(pre, S, M) * meltKwh) / melt + (priceSum(pre, M, tap) * input.process.holdingKw) / 60;
-        const cand = { cost: (cell?.cost ?? 0) + c, hold: (cell?.hold ?? 0) + hold, prevTap, start: S };
-        if (better(cand, layer[tap])) layer[tap] = cand;
+  const coarse = solveDp(input, null);
+  explored += coarse.explored;
+  let bestStarts = coarse.starts;
+  if (coarse.starts && input.gridMinutes > 1) {
+    // Refine: re-solve at 1-minute resolution around the grid optimum (and around
+    // current practice), so a schedule that is not on the grid cannot beat the answer.
+    const cur = currentPracticeStarts(input);
+    const cand = coarse.starts.map((s, k) => {
+      const set = new Set<number>();
+      for (let d = -input.gridMinutes; d <= input.gridMinutes; d++) set.add(s + d);
+      for (let d = -input.gridMinutes; d <= input.gridMinutes; d++) set.add(cur[k] + d);
+      return [...set].filter((x) => x >= 0 && x <= 1440).sort((x, y) => x - y);
+    });
+    const fine = solveDp(input, cand);
+    explored += fine.explored;
+    if (fine.starts) {
+      const a = evaluateSchedule(input, coarse.starts);
+      const b = evaluateSchedule(input, fine.starts);
+      if (b.feasible && (b.totals.costPaise < a.totals.costPaise - EPS || (Math.abs(b.totals.costPaise - a.totals.costPaise) <= EPS && b.totals.holdMinutes < a.totals.holdMinutes))) {
+        bestStarts = fine.starts;
       }
     }
-    layers.push(layer);
   }
-
-  const last = layers[n - 1];
-  let bestTap = -1;
-  for (let tap = 0; tap < H; tap++) {
-    const c = last[tap];
-    if (c && (bestTap === -1 || better(c, last[bestTap]))) bestTap = tap;
-  }
+  const bestTap = bestStarts ? 0 : -1;
 
   if (bestTap === -1) {
     const early = earliestSchedule(input);
@@ -533,7 +584,7 @@ export function optimise(input: OptimizerInput): OptimizerResult {
         detail: `Each heat needs about ${input.process.nominalMeltMinutes} min melting plus ${input.process.turnaroundMinutes} min turnaround; ${input.heats.length} heats cannot fit before the cut-off with these limits.`,
       });
       if (blocking.length === 0)
-        blocking.push({ constraint: "Combined limits", detail: `Earliest last tap ${fmt(lastItem.tapMin)}; no start-time combination on the ${g}-minute grid satisfies every limit.` });
+        blocking.push({ constraint: "Combined limits", detail: `Earliest last tap ${fmt(lastItem.tapMin)}; no start-time combination on the ${input.gridMinutes}-minute grid satisfies every limit.` });
     }
     return {
       status: "INFEASIBLE",
@@ -550,14 +601,7 @@ export function optimise(input: OptimizerInput): OptimizerResult {
     };
   }
 
-  // Back-track
-  const starts = new Array<number>(n);
-  let tap = bestTap;
-  for (let k = n - 1; k >= 0; k--) {
-    const c = layers[k][tap]!;
-    starts[k] = c.start;
-    tap = c.prevTap;
-  }
+  const starts = bestStarts!;
   const recommended = evaluateSchedule(input, starts);
   if (!recommended.feasible) {
     // Should not happen: the evaluator re-checks the solver independently.
