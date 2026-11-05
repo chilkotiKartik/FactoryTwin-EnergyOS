@@ -27,6 +27,7 @@ import { resetScenario } from "@/server/services/demo";
 import { updateSettings } from "@/server/services/settings";
 
 import { DAY_COOKIE } from "@/lib/constants";
+import { clientAddress, createRateLimiter } from "@/server/ratelimit";
 
 async function withActor<T>(fn: (db: DB, actor: Actor) => Promise<T>, opts: { allowPendingPassword?: boolean } = {}): Promise<ActionResult<T>> {
   try {
@@ -45,40 +46,27 @@ async function withActor<T>(fn: (db: DB, actor: Actor) => Promise<T>, opts: { al
 
 // Login throttling: 5 failures per email and 20 per client address per minute.
 // In-process and bounded; a multi-instance deployment should move this to a shared store.
-const attempts = new Map<string, { n: number; until: number }>();
+const failures = createRateLimiter(5, 60_000);
+const ipFailures = createRateLimiter(20, 60_000);
 let dummyHash: Promise<string> | null = null;
-
-function limited(key: string, max: number) {
-  const a = attempts.get(key);
-  return !!a && a.n >= max && a.until > Date.now();
-}
-
-function recordFailure(key: string) {
-  const now = Date.now();
-  if (attempts.size > 10_000) for (const [k, v] of attempts) if (v.until < now) attempts.delete(k);
-  const cur = attempts.get(key);
-  attempts.set(key, { n: (cur && cur.until > now ? cur.n : 0) + 1, until: now + 60_000 });
-}
 
 export async function loginAction(_prev: ActionResult | null, form: FormData): Promise<ActionResult> {
   const email = String(form.get("email") ?? "").trim().toLowerCase().slice(0, 200);
   const password = String(form.get("password") ?? "").slice(0, 200);
   if (!email || !password) return { ok: false, message: "Enter your email and password." };
   const h = await headers();
-  const ipKey = `ip:${(h.get("x-forwarded-for") ?? h.get("x-real-ip") ?? "local").split(",")[0].trim()}`;
-  const emailKey = `email:${email}`;
-  if (limited(emailKey, 5) || limited(ipKey, 20)) return { ok: false, message: "Too many attempts. Wait a minute and try again." };
+  const ipKey = clientAddress(h);
+  if (failures.blocked(email) || ipFailures.blocked(ipKey)) return { ok: false, message: "Too many attempts. Wait a minute and try again." };
   const db = getDb();
   const user = await db.query.users.findFirst({ where: eq(users.email, email) });
   // Always run scrypt, so the response time does not reveal whether the email exists.
   dummyHash ??= hashPassword("not-a-real-password");
   const ok = await verifyPassword(password, user?.passwordHash ?? (await dummyHash));
   if (!user || !ok || user.disabled) {
-    recordFailure(emailKey);
-    recordFailure(ipKey);
+    failures.hit(email);
+    ipFailures.hit(ipKey);
     return { ok: false, message: "Email or password is incorrect." };
   }
-  attempts.delete(emailKey);
   await db.delete(sessions).where(lt(sessions.expiresAt, Date.now()));
   await startSession(user.id);
   await audit(db, null, "auth.login", "user", user.id, { email }, null);
