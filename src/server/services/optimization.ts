@@ -25,15 +25,38 @@ export interface BuiltInput {
   snapshot: Record<string, unknown>;
 }
 
+export interface WhatIfParams {
+  /** Multiplier on the rate in SOLAR windows (1 = as tariff). */
+  solarRateFactor?: number;
+  /** Multiplier on the rate in PEAK windows (1 = as tariff). */
+  peakRateFactor?: number;
+  holdingKw?: number;
+  maxHoldMinutes?: number;
+  deadlineMin?: number;
+  availableFromMin?: number;
+  availableToMin?: number;
+  currentPracticeStartMin?: number;
+}
+
 /** Assemble optimiser input from persisted records and fingerprint it for staleness checks. */
-export async function buildInput(db: DB, actor: Actor, planId: string): Promise<BuiltInput> {
+export async function buildInput(db: DB, actor: Actor, planId: string, ov: WhatIfParams = {}): Promise<BuiltInput> {
   const f = actor.factory;
   const detail = await getPlan(db, actor, planId);
   if (!detail) throw notFound("Plan");
   const furnace = await requireFurnace(db, f.id);
   const versions = await loadTariffVersions(db, f.id);
   const noon = localDayStart(detail.plan.planDate, f.timeZone) + 12 * 3600_000;
-  const tariff = versionAt(versions, noon);
+  const base = versionAt(versions, noon);
+  const tariff =
+    base && (ov.solarRateFactor !== undefined || ov.peakRateFactor !== undefined)
+      ? {
+          ...base,
+          periods: base.periods.map((p) => ({
+            ...p,
+            ratePaise: p.ratePaise * (p.kind === "SOLAR" ? (ov.solarRateFactor ?? 1) : p.kind === "PEAK" ? (ov.peakRateFactor ?? 1) : 1),
+          })),
+        }
+      : base;
   if (!tariff) throw validation("No tariff version is in force for the plan date. Add one under Tariffs.");
   const { model, fitId } = await latestModel(db, f.id, furnace, f);
   const input: OptimizerInput = {
@@ -51,8 +74,8 @@ export async function buildInput(db: DB, actor: Actor, planId: string): Promise<
     furnace: {
       capacityKg: furnace.capacityKg,
       ratedKw: furnace.ratedKw,
-      availableFromMin: furnace.availableFromMin,
-      availableToMin: furnace.availableToMin,
+      availableFromMin: ov.availableFromMin ?? furnace.availableFromMin,
+      availableToMin: ov.availableToMin ?? furnace.availableToMin,
       maxHeatsPerDay: furnace.maxHeatsPerDay,
       downtime: detail.plan.downtime,
     },
@@ -61,16 +84,16 @@ export async function buildInput(db: DB, actor: Actor, planId: string): Promise<
       coldExtraMinutes: f.coldExtraMinutes,
       coldGapMinutes: f.coldGapMinutes,
       turnaroundMinutes: f.turnaroundMinutes,
-      holdingKw: f.holdingKw,
-      maxHoldMinutes: f.maxHoldMinutes,
+      holdingKw: ov.holdingKw ?? f.holdingKw,
+      maxHoldMinutes: ov.maxHoldMinutes ?? f.maxHoldMinutes,
     },
     meltKwh: detail.heats.map((h) => ({
       warm: expectedGoodPracticeKwh(model, { chargeTonnes: h.chargeKg / 1000, coldStart: false }),
       cold: expectedGoodPracticeKwh(model, { chargeTonnes: h.chargeKg / 1000, coldStart: true }),
     })),
     pricePaise: Array.from(minuteRateTable(tariff)),
-    deadlineMin: detail.plan.deadlineMin,
-    currentPracticeStartMin: detail.plan.currentPracticeStartMin,
+    deadlineMin: ov.deadlineMin ?? detail.plan.deadlineMin,
+    currentPracticeStartMin: ov.currentPracticeStartMin ?? detail.plan.currentPracticeStartMin,
   };
   const snapshot = {
     plan: { id: detail.plan.id, date: detail.plan.planDate, revision: detail.plan.revision },
@@ -319,4 +342,48 @@ export async function listRuns(db: DB, actor: Actor, planId: string) {
 export async function isStale(db: DB, actor: Actor, planId: string, inputHash: string): Promise<boolean> {
   const built = await buildInput(db, actor, planId);
   return built.hash !== inputHash;
+}
+
+export interface WhatIfResult {
+  label: "MODELLED";
+  status: "OPTIMAL" | "INFEASIBLE";
+  runtimeMs: number;
+  blocking: string[];
+  current: { costPaise: number; kwh: number; holdMinutes: number; firstStartMin: number | null; lastTapMin: number | null };
+  recommended: { costPaise: number; kwh: number; holdMinutes: number; firstStartMin: number | null; lastTapMin: number | null } | null;
+  /** Cost saved versus current practice, paise per tonne poured. */
+  savingPaisePerTonne: number | null;
+}
+
+const clampN = (v: number | undefined, lo: number, hi: number) => (v === undefined || !Number.isFinite(v) ? undefined : Math.min(hi, Math.max(lo, v)));
+
+/**
+ * Re-run the optimiser with overridden inputs without saving anything. A planning
+ * aid only: it creates no run, recommendation or approval, and its figures are MODELLED.
+ */
+export async function whatIf(db: DB, actor: Actor, planId: string, p: WhatIfParams): Promise<WhatIfResult> {
+  requirePerm(actor, "view");
+  const ov: WhatIfParams = {
+    solarRateFactor: clampN(p.solarRateFactor, 0.2, 3),
+    peakRateFactor: clampN(p.peakRateFactor, 0.2, 3),
+    holdingKw: clampN(p.holdingKw, 0, 5000),
+    maxHoldMinutes: clampN(p.maxHoldMinutes, 0, 720),
+    deadlineMin: clampN(p.deadlineMin, 0, 1440),
+    availableFromMin: clampN(p.availableFromMin, 0, 1440),
+    availableToMin: clampN(p.availableToMin, 0, 1440),
+    currentPracticeStartMin: clampN(p.currentPracticeStartMin, 0, 1440),
+  };
+  const built = await buildInput(db, actor, planId, ov);
+  const r = optimise(built.input);
+  const pick = (e: ScheduleEvaluation) => ({ costPaise: e.totals.costPaise, kwh: e.totals.kwh, holdMinutes: e.totals.holdMinutes, firstStartMin: e.totals.firstStartMin, lastTapMin: e.totals.lastTapMin });
+  const rec = r.recommended;
+  return {
+    label: "MODELLED",
+    status: r.status,
+    runtimeMs: r.runtimeMs,
+    blocking: r.blocking.map((b) => `${b.constraint}: ${b.detail}`),
+    current: pick(r.current),
+    recommended: rec ? pick(rec) : null,
+    savingPaisePerTonne: rec && rec.totals.tonnesPoured > 0 ? (r.current.totals.costPaise - rec.totals.costPaise) / rec.totals.tonnesPoured : null,
+  };
 }

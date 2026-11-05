@@ -19,6 +19,7 @@ import { Badge, Evidence } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty";
 import { Table, Td, Th } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { WhatIf } from "@/components/optimizer/what-if";
 import { PlanEditor } from "@/components/optimizer/plan-editor";
 import { RunOptimizerButton } from "@/components/optimizer/run-button";
 import { CreatePlanForm } from "@/components/optimizer/create-plan";
@@ -75,6 +76,7 @@ export default async function OptimizerPage(props: PageProps<"/optimizer">) {
   const result = run && run.status !== "PAUSED_DATA_QUALITY" ? (run.result as unknown as OptimizerResult & { dataQuality?: unknown }) : null;
   const paused = run?.status === "PAUSED_DATA_QUALITY" ? (run.result as { message: string }) : null;
   const latestRecForRun = run ? await db.query.recommendations.findFirst({ where: eq(recommendations.optimizationRunId, run.id) }) : null;
+  const furnaceRow = await primaryFurnace(db, actor.factory.id);
   const snapshot = run?.inputSnapshot as { tariff?: { name: string; version: number }; model?: { version: string; n: number } } | undefined;
 
   return (
@@ -213,6 +215,25 @@ export default async function OptimizerPage(props: PageProps<"/optimizer">) {
                 <ScheduleTable current={result.current.items} recommended={result.recommended.items} />
               </Panel>
             </>
+          ) : null}
+
+          {furnaceRow ? (
+            <Panel>
+              <PanelHeader title="What-if" subtitle="Try different tariffs, holding limits or times. Computed on the server in milliseconds; nothing is saved." />
+              <PanelBody>
+                <WhatIf
+                  planId={plan.id}
+                  defaults={{
+                    holdingKw: actor.factory.holdingKw,
+                    maxHoldMinutes: actor.factory.maxHoldMinutes,
+                    deadlineMin: plan.deadlineMin,
+                    availableFromMin: furnaceRow.availableFromMin,
+                    availableToMin: furnaceRow.availableToMin,
+                    currentPracticeStartMin: plan.currentPracticeStartMin,
+                  }}
+                />
+              </PanelBody>
+            </Panel>
           ) : null}
 
           {result ? (

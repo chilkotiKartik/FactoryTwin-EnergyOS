@@ -19,7 +19,7 @@ import { createHeat, updateHeat } from "@/server/services/heats";
 import { commitCsv, previewCsv, type CsvPreview, type DeclaredSource } from "@/server/services/meters";
 import { createTariffVersion, previewRate } from "@/server/services/tariffs";
 import { createPlan, updatePlan } from "@/server/services/plans";
-import { runOptimization, type RunOutcome } from "@/server/services/optimization";
+import { runOptimization, whatIf, type RunOutcome, type WhatIfParams, type WhatIfResult } from "@/server/services/optimization";
 import { decideRecommendation } from "@/server/services/recommendations";
 import { recordSimulatedOutcome } from "@/server/services/execution";
 import { createVerificationReport } from "@/server/services/verification";
@@ -29,13 +29,13 @@ import { updateSettings } from "@/server/services/settings";
 import { DAY_COOKIE } from "@/lib/constants";
 import { clientAddress, createRateLimiter } from "@/server/ratelimit";
 
-async function withActor<T>(fn: (db: DB, actor: Actor) => Promise<T>, opts: { allowPendingPassword?: boolean } = {}): Promise<ActionResult<T>> {
+async function withActor<T>(fn: (db: DB, actor: Actor) => Promise<T>, opts: { allowPendingPassword?: boolean; readOnly?: boolean } = {}): Promise<ActionResult<T>> {
   try {
     const actor = await currentActor();
     if (!actor) throw new AppError("UNAUTHENTICATED", "Your session has ended. Sign in again.");
     if (actor.mustChangePassword && !opts.allowPendingPassword) throw new AppError("FORBIDDEN", "Set your own password first (Account page).");
     const data = await fn(getDb(), actor);
-    revalidatePath("/", "layout");
+    if (!opts.readOnly) revalidatePath("/", "layout");
     return { ok: true, data };
   } catch (e) {
     return toActionError(e);
@@ -158,6 +158,10 @@ export async function updatePlanAction(input: unknown) {
 
 export async function createPlanAction(input: unknown) {
   return withActor((db, a) => createPlan(db, a, input));
+}
+
+export async function whatIfAction(planId: string, params: WhatIfParams): Promise<ActionResult<WhatIfResult>> {
+  return withActor((db, a) => whatIf(db, a, planId, params), { readOnly: true });
 }
 
 export async function runOptimizationAction(planId: string): Promise<ActionResult<RunOutcome>> {
