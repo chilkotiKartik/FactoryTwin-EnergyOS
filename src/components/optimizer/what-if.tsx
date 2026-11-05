@@ -29,8 +29,8 @@ export function WhatIf({ planId, defaults }: { planId: string; defaults: Default
 
   useEffect(() => {
     const my = ++seq.current;
-    setBusy(true);
     const t = setTimeout(async () => {
+      setBusy(true);
       const params: WhatIfParams = {
         solarRateFactor: p.solar / 100,
         peakRateFactor: p.peak / 100,
