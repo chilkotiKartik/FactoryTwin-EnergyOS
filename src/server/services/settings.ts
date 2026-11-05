@@ -26,6 +26,12 @@ export const settingsSchema = z
     availableFromMin: z.number().int().min(0).max(1439),
     availableToMin: z.number().int().min(1).max(1440),
     maxHeatsPerDay: z.number().int().min(1).max(60),
+    // Shared connection (all optional; omitted = leave unchanged, null = clear).
+    siteCapKva: z.number().positive().max(1_000_000).nullable().optional(),
+    powerFactor: z.number().min(0.5).max(1).optional(),
+    baseLoadDayKw: z.number().min(0).max(1_000_000).optional(),
+    baseLoadNightKw: z.number().min(0).max(1_000_000).optional(),
+    demandRateRupeesPerKvaMonth: z.number().positive().max(10_000).nullable().optional(),
   })
   .refine((v) => v.availableToMin > v.availableFromMin, { message: "Availability must end after it starts.", path: ["availableToMin"] });
 
@@ -59,6 +65,11 @@ export async function updateSettings(db: DB, actor: Actor, raw: unknown) {
         maxHoldMinutes: v.maxHoldMinutes,
         minCompleteness: v.minCompletenessPct / 100,
         gridMinutes: v.gridMinutes,
+        ...(v.siteCapKva !== undefined ? { siteCapKva: v.siteCapKva } : {}),
+        ...(v.powerFactor !== undefined ? { powerFactor: v.powerFactor } : {}),
+        ...(v.baseLoadDayKw !== undefined ? { baseLoadDayKw: v.baseLoadDayKw } : {}),
+        ...(v.baseLoadNightKw !== undefined ? { baseLoadNightKw: v.baseLoadNightKw } : {}),
+        ...(v.demandRateRupeesPerKvaMonth !== undefined ? { demandRatePaisePerKvaMonth: v.demandRateRupeesPerKvaMonth === null ? null : Math.round(v.demandRateRupeesPerKvaMonth * 100) } : {}),
       })
       .where(eq(factories.id, actor.factory.id));
     await tx

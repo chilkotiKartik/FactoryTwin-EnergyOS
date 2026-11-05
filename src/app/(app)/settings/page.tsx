@@ -46,6 +46,11 @@ export default async function SettingsPage() {
                 availableFromMin: furnace.availableFromMin,
                 availableToMin: furnace.availableToMin,
                 maxHeatsPerDay: furnace.maxHeatsPerDay,
+                siteCapKva: f.siteCapKva,
+                powerFactor: f.powerFactor,
+                baseLoadDayKw: f.baseLoadDayKw,
+                baseLoadNightKw: f.baseLoadNightKw,
+                demandRateRupeesPerKvaMonth: f.demandRatePaisePerKvaMonth === null ? null : f.demandRatePaisePerKvaMonth / 100,
               }}
             />
           </PanelBody>

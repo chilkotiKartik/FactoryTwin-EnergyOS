@@ -129,6 +129,7 @@ export interface Predicted {
   current: { kwh: number; costPaise: number; holdMinutes: number; tonnes: number; sec: number | null; costPerTonnePaise: number | null; firstStartMin: number | null; lastTapMin: number | null };
   recommended: Predicted["current"];
   delta: { kwh: number; kwhPct: number | null; costPaise: number; costPct: number | null; holdMinutes: number; tonnes: number };
+  peak?: { currentKva: number | null; recommendedKva: number | null; monthlyChargeDeltaPaise: number | null };
 }
 
 /** Before/after table for a modelled prediction. Never presented as an achieved saving. */
@@ -140,6 +141,16 @@ export function PredictedTable({ p }: { p: Predicted }) {
     ["Cost per tonne", inr(p.current.costPerTonnePaise), inr(p.recommended.costPerTonnePaise), pct(p.current.costPerTonnePaise && p.recommended.costPerTonnePaise ? (100 * (p.recommended.costPerTonnePaise - p.current.costPerTonnePaise)) / p.current.costPerTonnePaise : null)],
     ["Holding time", `${fmt(p.current.holdMinutes)} min`, `${fmt(p.recommended.holdMinutes)} min`, `${signed(p.delta.holdMinutes)} min`],
     ["Tonnes poured", `${fmt(p.current.tonnes, 2)} t`, `${fmt(p.recommended.tonnes, 2)} t`, p.delta.tonnes === 0 ? "unchanged" : `${signed(p.delta.tonnes, 2)} t`],
+    ...(p.peak && p.peak.currentKva !== null && p.peak.recommendedKva !== null
+      ? ([
+          [
+            "Peak demand (15-min)",
+            `${fmt(p.peak.currentKva, 0)} kVA`,
+            `${fmt(p.peak.recommendedKva, 0)} kVA`,
+            `${signed(p.peak.recommendedKva - p.peak.currentKva, 0)} kVA${p.peak.monthlyChargeDeltaPaise !== null ? ` · up to ${p.peak.monthlyChargeDeltaPaise < 0 ? "−" : "+"}${inr(Math.abs(p.peak.monthlyChargeDeltaPaise))}/month if this day sets the peak` : ""}`,
+          ],
+        ] as [string, string, string, string][])
+      : []),
     ["First start / last tap", `${hhmm(p.current.firstStartMin)} / ${hhmm(p.current.lastTapMin)}`, `${hhmm(p.recommended.firstStartMin)} / ${hhmm(p.recommended.lastTapMin)}`, ""],
   ];
   return (

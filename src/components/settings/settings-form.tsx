@@ -25,7 +25,20 @@ export interface SettingsValues {
   availableFromMin: number;
   availableToMin: number;
   maxHeatsPerDay: number;
+  siteCapKva: number | null;
+  powerFactor: number;
+  baseLoadDayKw: number;
+  baseLoadNightKw: number;
+  demandRateRupeesPerKvaMonth: number | null;
 }
+
+const SITE_FIELDS: { k: "siteCapKva" | "powerFactor" | "baseLoadDayKw" | "baseLoadNightKw" | "demandRateRupeesPerKvaMonth"; label: string; unit: string; hint: string }[] = [
+  { k: "siteCapKva", label: "Contract demand (cap)", unit: "kVA", hint: "Leave blank for no cap. Hard limit on base load plus furnace." },
+  { k: "powerFactor", label: "Power factor", unit: "", hint: "Assumption until measured." },
+  { k: "baseLoadDayKw", label: "Other plant load, 06:00–22:00", unit: "kW", hint: "Everything except this furnace." },
+  { k: "baseLoadNightKw", label: "Other plant load, overnight", unit: "kW", hint: "" },
+  { k: "demandRateRupeesPerKvaMonth", label: "Demand charge", unit: "₹/kVA/month", hint: "Leave blank to skip the bill estimate." },
+];
 
 const FIELDS: { k: keyof SettingsValues; label: string; unit: string }[] = [
   { k: "capacityKg", label: "Furnace capacity", unit: "kg" },
@@ -43,7 +56,7 @@ const FIELDS: { k: keyof SettingsValues; label: string; unit: string }[] = [
 
 export function SettingsForm({ initial, canEdit }: { initial: SettingsValues; canEdit: boolean }) {
   const router = useRouter();
-  const [v, setV] = useState<Record<string, string>>(() => Object.fromEntries(Object.entries(initial).map(([k, x]) => [k, String(x)])));
+  const [v, setV] = useState<Record<string, string>>(() => Object.fromEntries(Object.entries(initial).map(([k, x]) => [k, x === null ? "" : String(x)])));
   const [from, setFrom] = useState(hhmm(initial.availableFromMin));
   const [to, setTo] = useState(initial.availableToMin === 1440 ? "24:00" : hhmm(initial.availableToMin));
   const [pending, start] = useTransition();
@@ -56,7 +69,15 @@ export function SettingsForm({ initial, canEdit }: { initial: SettingsValues; ca
       className="flex flex-col gap-4"
       onSubmit={(e) => {
         e.preventDefault();
-        const payload = { ...Object.fromEntries(FIELDS.map((f) => [f.k, Number(v[f.k])])), gridMinutes: Number(v.gridMinutes), emissionFactorSource: v.emissionFactorSource, availableFromMin: m(from), availableToMin: m(to) };
+        const optional = (k: string) => (v[k].trim() === "" ? null : Number(v[k]));
+        const payload = {
+          ...Object.fromEntries(FIELDS.map((f) => [f.k, Number(v[f.k])])),
+          siteCapKva: optional("siteCapKva"),
+          powerFactor: Number(v.powerFactor),
+          baseLoadDayKw: Number(v.baseLoadDayKw || 0),
+          baseLoadNightKw: Number(v.baseLoadNightKw || 0),
+          demandRateRupeesPerKvaMonth: optional("demandRateRupeesPerKvaMonth"),
+          gridMinutes: Number(v.gridMinutes), emissionFactorSource: v.emissionFactorSource, availableFromMin: m(from), availableToMin: m(to) };
         start(async () => {
           const r = await updateSettingsAction(payload);
           if (!r.ok) return void toast.error(r.message);
@@ -90,6 +111,14 @@ export function SettingsForm({ initial, canEdit }: { initial: SettingsValues; ca
           Furnace available until
           <Input value={to} onChange={(e) => setTo(e.target.value)} />
         </label>
+        <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3 sm:col-span-2 lg:col-span-3">Shared connection (optional)</p>
+        {SITE_FIELDS.map((f) => (
+          <label key={f.k} className="flex flex-col gap-1 text-[12px] font-medium text-ink-2">
+            {f.label} {f.unit ? <span className="font-normal text-ink-3">({f.unit})</span> : null}
+            <Input inputMode="decimal" value={v[f.k]} onChange={(e) => setV({ ...v, [f.k]: e.target.value })} />
+            {f.hint ? <span className="font-normal text-ink-3">{f.hint}</span> : null}
+          </label>
+        ))}
         <label className="flex flex-col gap-1 text-[12px] font-medium text-ink-2 sm:col-span-2 lg:col-span-3">
           Emission factor source
           <Input value={v.emissionFactorSource} onChange={(e) => setV({ ...v, emissionFactorSource: e.target.value })} />
