@@ -14,6 +14,7 @@ interface Defaults {
   availableFromMin: number;
   availableToMin: number;
   currentPracticeStartMin: number;
+  siteCapKva: number | null;
 }
 
 /**
@@ -22,6 +23,7 @@ interface Defaults {
  */
 export function WhatIf({ planId, defaults }: { planId: string; defaults: Defaults }) {
   const [reorder, setReorder] = useState(false);
+  const [cap, setCap] = useState(defaults.siteCapKva === null ? "" : String(defaults.siteCapKva));
   const [p, setP] = useState({ solar: 100, peak: 100, ...defaults });
   const [res, setRes] = useState<WhatIfResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -42,6 +44,7 @@ export function WhatIf({ planId, defaults }: { planId: string; defaults: Default
         availableToMin: p.availableToMin,
         currentPracticeStartMin: p.currentPracticeStartMin,
         allowReorder: reorder,
+        siteCapKva: cap.trim() === "" ? null : Number(cap),
       };
       const r = await whatIfAction(planId, params);
       if (my !== seq.current) return; // a newer request superseded this one
@@ -51,7 +54,7 @@ export function WhatIf({ planId, defaults }: { planId: string; defaults: Default
       setRes(r.data);
     }, 300);
     return () => clearTimeout(t);
-  }, [p, planId, reorder]);
+  }, [p, planId, reorder, cap]);
 
   const reset = () => setP({ solar: 100, peak: 100, ...defaults });
   const rec = res?.recommended ?? null;
@@ -69,6 +72,10 @@ export function WhatIf({ planId, defaults }: { planId: string; defaults: Default
         <Slider id="wi-start" label="Current practice starts" value={p.currentPracticeStartMin} min={0} max={720} step={5} display={hhmm(p.currentPracticeStartMin)} onChange={(currentPracticeStartMin) => setP({ ...p, currentPracticeStartMin })} />
       </div>
 
+      <label className="flex max-w-xs flex-col gap-1 text-[12px] font-medium text-ink-2">
+        Contract demand cap (kVA, blank = none)
+        <input inputMode="decimal" value={cap} onChange={(e) => setCap(e.target.value)} className="h-9 rounded-md border border-line-strong bg-surface px-3 text-sm num" />
+      </label>
       <label className="flex items-center gap-2 text-[13px] text-ink-2">
         <input type="checkbox" checked={reorder} onChange={(e) => setReorder(e.target.checked)} className="size-4" />
         Allow reordering heats within an order
@@ -104,6 +111,7 @@ export function WhatIf({ planId, defaults }: { planId: string; defaults: Default
             <Metric label="Last tap" value={`${hhmm(res.current.lastTapMin)} → ${hhmm(rec.lastTapMin)}`} />
             <Metric label="Energy" value={`${fmt(res.current.kwh)} → ${fmt(rec.kwh)} kWh`} />
             <Metric label="Solved in" value={`${fmt(res.runtimeMs, 0)} ms`} />
+            {res.current.peak15Kva !== null && rec.peak15Kva !== null ? <Metric label="Peak demand (15-min)" value={`${fmt(res.current.peak15Kva)} → ${fmt(rec.peak15Kva)} kVA`} /> : null}
             {res.reordered ? <Metric label="New heat order" value={res.sequence.join(" → ")} /> : null}
           </dl>
         ) : null}

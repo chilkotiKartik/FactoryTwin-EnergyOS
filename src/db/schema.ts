@@ -69,6 +69,15 @@ export const factories = sqliteTable("factories", {
   maxHoldMinutes: integer("max_hold_minutes").notNull().default(60),
   minCompleteness: real("min_completeness").notNull().default(0.98),
   gridMinutes: integer("grid_minutes").notNull().default(5),
+  /** Sanctioned / contract demand of the connection, kVA. Null = no cap is enforced. */
+  siteCapKva: real("site_cap_kva"),
+  /** Site power factor used to convert kW to kVA (ASSUMPTION until measured). */
+  powerFactor: real("power_factor").notNull().default(0.95),
+  /** Other plant load (everything except the furnace), kW, 06:00–22:00 and overnight. */
+  baseLoadDayKw: real("base_load_day_kw").notNull().default(0),
+  baseLoadNightKw: real("base_load_night_kw").notNull().default(0),
+  /** Demand charge, paise per kVA per month. Null = not modelled. */
+  demandRatePaisePerKvaMonth: integer("demand_rate_paise_per_kva_month"),
   /** Outbound alert webhook (HTTPS). Payloads are signed with HMAC-SHA256 using alertWebhookSecret. */
   alertWebhookUrl: text("alert_webhook_url"),
   alertWebhookSecret: text("alert_webhook_secret"),

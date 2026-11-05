@@ -22,6 +22,13 @@
       "when": 1793200110454,
       "tag": "0002_hardening_phase2",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1793860884796,
+      "tag": "0003_swift_roland_deschain",
+      "breakpoints": true
     }
   ]
 }

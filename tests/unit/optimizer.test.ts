@@ -165,3 +165,75 @@ describe("heat reordering (opt-in)", () => {
     expect(r.reordered).toBe(false);
   });
 });
+
+import { furnaceLoadProfile, optimiseSite } from "@/domain/optimizer";
+import { DECK_MOULD_READY } from "@/domain/scenarios";
+
+describe("shared-connection demand cap", () => {
+  const PF = 0.95;
+  const flat = (kw: number) => Array.from({ length: 1440 }, () => kw);
+  /** Other plant load: 300 kW from 09:00 to 13:00, 20 kW otherwise. */
+  const busyMidday = () => Array.from({ length: 1440 }, (_, m) => (m >= 540 && m < 780 ? 300 : 20));
+
+  it("reports no peak when no site is given, and a peak when it is", () => {
+    expect(optimise(deckInput()).recommended!.totals.peak15Kva).toBeNull();
+    const r = optimise(deckInput({ site: { capKw: null, baseLoadKw: flat(100), powerFactor: PF } }));
+    expect(r.recommended!.totals.peak15Kva!).toBeGreaterThan((100 + 540) / PF - 25);
+    expect(r.recommended!.checks.some((c) => c.id === "site-cap")).toBe(false);
+  });
+
+  it("keeps melting out of the hours when other load leaves no headroom", () => {
+    const free = optimise(deckInput());
+    const capped = optimise(deckInput({ site: { capKw: 700, baseLoadKw: busyMidday(), powerFactor: PF } }));
+    expect(capped.status).toBe("OPTIMAL");
+    const rec = capped.recommended!;
+    expect(rec.checks.find((c) => c.id === "site-cap")!.status).toBe("PASS");
+    for (const it of rec.items) expect(it.meltEndMin <= 540 || it.startMin >= 780).toBe(true);
+    // A cap can only cost money, never save it.
+    expect(rec.totals.costPaise).toBeGreaterThanOrEqual(free.recommended!.totals.costPaise - 1e-6);
+    // Independent recomputation of the load profile agrees with the check.
+    const profile = furnaceLoadProfile(deckInput(), rec.items);
+    for (let m = 0; m < 1440; m++) expect(profile[m] + busyMidday()[m]).toBeLessThanOrEqual(700 + 1e-6);
+  });
+
+  it("flags current practice that breaks the cap", () => {
+    const r = optimise(deckInput({ site: { capKw: 700, baseLoadKw: busyMidday(), powerFactor: PF } }));
+    expect(r.current.checks.find((c) => c.id === "site-cap")!.status).toBe("FAIL");
+    expect(r.warnings.join(" ")).toMatch(/current-practice/i);
+  });
+
+  it("explains an infeasible plan caused only by the cap", () => {
+    const r = optimise(deckInput({ site: { capKw: 500, baseLoadKw: flat(0), powerFactor: PF } }));
+    expect(r.status).toBe("INFEASIBLE");
+    expect(r.blocking[0].constraint).toBe("Site demand cap");
+    expect(r.blocking[0].detail).toMatch(/relaxed/);
+  });
+
+  it("schedules two furnaces under one shared cap", () => {
+    const six = DECK_MOULD_READY.slice(0, 6);
+    const a = deckInput({}, six);
+    const b = deckInput({}, six.map((x) => (x === null ? null : x + 30)));
+    b.heats = b.heats.map((h) => ({ ...h, key: `b-${h.key}`, orderId: "ob" }));
+    b.orders = [{ id: "ob", code: "PO-B", requiredTonnes: 3, dueMin: 1320 }];
+    a.heats = a.heats.map((h) => ({ ...h, orderId: "oa" }));
+    a.orders = [{ id: "oa", code: "PO-A", requiredTonnes: 3, dueMin: 1320 }];
+    const site = { capKw: 1000, baseLoadKw: flat(0), powerFactor: PF };
+    const res = optimiseSite([a, b], site);
+    expect(res.status).toBe("OPTIMAL");
+    expect(res.furnaces).toHaveLength(2);
+    const pa = furnaceLoadProfile(a, res.furnaces[0].recommended!.items);
+    const pb = furnaceLoadProfile(b, res.furnaces[1].recommended!.items);
+    for (let m = 0; m < 1440; m++) expect(pa[m] + pb[m]).toBeLessThanOrEqual(1000 + 1e-6);
+    expect(res.peak15Kva!).toBeLessThanOrEqual(1000 / PF + 1e-6);
+    // Without the shared cap the two furnaces would otherwise be free to overlap fully.
+    expect(res.furnaces.every((f) => f.recommended!.feasible)).toBe(true);
+  });
+
+  it("reports infeasible when a later furnace cannot fit under the cap", () => {
+    // 2 × 12 heats of ~45 min cannot share one 600 kW connection (no two melts may overlap) inside 06:00–22:00.
+    const a = deckInput();
+    const res = optimiseSite([a, a], { capKw: 600, baseLoadKw: flat(0), powerFactor: PF });
+    expect(res.status).toBe("INFEASIBLE");
+    expect(res.peak15Kva).toBeNull();
+  });
+});

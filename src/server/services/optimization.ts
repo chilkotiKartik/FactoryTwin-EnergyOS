@@ -3,7 +3,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import type { DB } from "@/db/client";
 import { optimizationRuns, recommendations, scheduleItems, scheduleVersions } from "@/db/schema";
 import { expectedGoodPracticeKwh } from "@/domain/model";
-import { optimise, type OptimizerInput, type OptimizerResult, type ScheduleEvaluation } from "@/domain/optimizer";
+import { optimise, type OptimizerInput, type OptimizerResult, type ScheduleEvaluation, type SiteLoad } from "@/domain/optimizer";
 import { minuteRateTable, versionAt } from "@/domain/tariff";
 import { localDayStart } from "@/domain/time";
 import type { Actor } from "../context";
@@ -38,6 +38,22 @@ export interface WhatIfParams {
   currentPracticeStartMin?: number;
   /** Let the solver reorder heats within an order. */
   allowReorder?: boolean;
+  /** Override the site cap, kVA. null = no cap; undefined = the factory setting. */
+  siteCapKva?: number | null;
+}
+
+const DAY_FROM = 6 * 60;
+const DAY_TO = 22 * 60;
+
+/** Shared-connection limits from the factory settings, or undefined when none are configured. */
+export function siteLoad(f: Pick<Actor["factory"], "siteCapKva" | "powerFactor" | "baseLoadDayKw" | "baseLoadNightKw" | "demandRatePaisePerKvaMonth">, capOverrideKva?: number | null): SiteLoad | undefined {
+  const capKva = capOverrideKva === undefined ? f.siteCapKva : capOverrideKva;
+  if (capKva === null && f.baseLoadDayKw <= 0 && f.baseLoadNightKw <= 0 && f.demandRatePaisePerKvaMonth === null) return undefined;
+  return {
+    capKw: capKva === null ? null : capKva * f.powerFactor,
+    baseLoadKw: Array.from({ length: 1440 }, (_, m) => (m >= DAY_FROM && m < DAY_TO ? f.baseLoadDayKw : f.baseLoadNightKw)),
+    powerFactor: f.powerFactor,
+  };
 }
 
 /** Assemble optimiser input from persisted records and fingerprint it for staleness checks. */
@@ -97,12 +113,13 @@ export async function buildInput(db: DB, actor: Actor, planId: string, ov: WhatI
     deadlineMin: ov.deadlineMin ?? detail.plan.deadlineMin,
     currentPracticeStartMin: ov.currentPracticeStartMin ?? detail.plan.currentPracticeStartMin,
     allowReorder: ov.allowReorder === true,
+    site: siteLoad(f, ov.siteCapKva),
   };
   const snapshot = {
     plan: { id: detail.plan.id, date: detail.plan.planDate, revision: detail.plan.revision },
     tariff: { id: tariff.id, version: tariff.version, name: tariff.name, normalRatePaise: tariff.normalRatePaise, periods: tariff.periods },
     model: { fitId, version: model.version, kind: model.kind, coefficients: model.coefficients, n: model.n },
-    input: { ...input, pricePaise: undefined, allowReorder: undefined },
+    input: { ...input, pricePaise: undefined, allowReorder: undefined, site: input.site ? { capKw: input.site.capKw, powerFactor: input.site.powerFactor, baseLoadDayKw: f.baseLoadDayKw, baseLoadNightKw: f.baseLoadNightKw } : undefined },
   };
   const hash = createHash("sha256")
     .update(JSON.stringify({ ...snapshot, model: { ...snapshot.model, fitId: undefined }, plan: { id: detail.plan.id, date: detail.plan.planDate } }))
@@ -157,7 +174,7 @@ async function insertSchedule(
   return id;
 }
 
-function predicted(current: ScheduleEvaluation, rec: ScheduleEvaluation) {
+function predicted(current: ScheduleEvaluation, rec: ScheduleEvaluation, demandRatePaisePerKvaMonth: number | null) {
   const c = current.totals;
   const r = rec.totals;
   const sec = (t: typeof c) => (t.tonnesPoured > 0 ? t.kwh / t.tonnesPoured : null);
@@ -166,6 +183,12 @@ function predicted(current: ScheduleEvaluation, rec: ScheduleEvaluation) {
     label: "MODELLED",
     current: { kwh: c.kwh, costPaise: c.costPaise, holdMinutes: c.holdMinutes, tonnes: c.tonnesPoured, sec: sec(c), costPerTonnePaise: cpt(c), firstStartMin: c.firstStartMin, lastTapMin: c.lastTapMin },
     recommended: { kwh: r.kwh, costPaise: r.costPaise, holdMinutes: r.holdMinutes, tonnes: r.tonnesPoured, sec: sec(r), costPerTonnePaise: cpt(r), firstStartMin: r.firstStartMin, lastTapMin: r.lastTapMin },
+    peak: {
+      currentKva: c.peak15Kva,
+      recommendedKva: r.peak15Kva,
+      // Only if this day sets the month's billing peak; shown as a bound, not a forecast.
+      monthlyChargeDeltaPaise: demandRatePaisePerKvaMonth !== null && c.peak15Kva !== null && r.peak15Kva !== null ? (r.peak15Kva - c.peak15Kva) * demandRatePaisePerKvaMonth : null,
+    },
     delta: {
       kwh: r.kwh - c.kwh,
       kwhPct: c.kwh > 0 ? (100 * (r.kwh - c.kwh)) / c.kwh : null,
@@ -259,8 +282,10 @@ export async function runOptimization(db: DB, actor: Actor, planId: string, opts
         .where(and(eq(scheduleVersions.planId, planId), eq(scheduleVersions.status, "ACTIVE"), eq(scheduleVersions.kind, "CURRENT_PRACTICE")));
     }
     const currentId = await insertSchedule(tx, f.id, planId, runId, "CURRENT_PRACTICE", activeApproved ? "SUPERSEDED" : "ACTIVE", ++v, result.current);
-    const p = predicted(result.current, result.recommended);
-    const meaningful = p.delta.costPaise < -100 || p.delta.kwh < -1; // at least ₹1 or 1 kWh better
+    const p = predicted(result.current, result.recommended, f.demandRatePaisePerKvaMonth);
+    // At least ₹1 or 1 kWh better, or the schedule fixes a hard limit that current practice breaks (for example the site cap).
+    const fixesViolation = !result.current.feasible && result.recommended.feasible;
+    const meaningful = fixesViolation || p.delta.costPaise < -100 || p.delta.kwh < -1;
     if (!meaningful) {
       message = "The optimum matches current practice within ₹1 and 1 kWh. No change is recommended.";
       await audit(tx, actor, "optimizer.no_change", "optimization_run", runId, { planId });
@@ -277,7 +302,7 @@ export async function runOptimization(db: DB, actor: Actor, planId: string, opts
       .where(eq(recommendations.planId, planId));
     const recVersion = Number(verRow[0]?.v ?? 0) + 1;
     recommendationId = newId("rec");
-    const summary = `Start first heat ${hhmm(p.current.firstStartMin)} → ${hhmm(p.recommended.firstStartMin)}; holding ${p.current.holdMinutes} → ${p.recommended.holdMinutes} min; last tap ${hhmm(p.recommended.lastTapMin)}.${result.reordered ? ` Heat order changed within orders: ${result.recommended.items.map((i) => i.label).join(", ")}.` : ""}`;
+    const summary = `${fixesViolation ? "Current practice breaks a hard limit; this schedule respects every limit. " : ""}Start first heat ${hhmm(p.current.firstStartMin)} → ${hhmm(p.recommended.firstStartMin)}; holding ${p.current.holdMinutes} → ${p.recommended.holdMinutes} min; last tap ${hhmm(p.recommended.lastTapMin)}.${result.reordered ? ` Heat order changed within orders: ${result.recommended.items.map((i) => i.label).join(", ")}.` : ""}`;
     await tx.insert(recommendations).values({
       id: recommendationId,
       factoryId: f.id,
@@ -353,8 +378,8 @@ export interface WhatIfResult {
   status: "OPTIMAL" | "INFEASIBLE";
   runtimeMs: number;
   blocking: string[];
-  current: { costPaise: number; kwh: number; holdMinutes: number; firstStartMin: number | null; lastTapMin: number | null };
-  recommended: { costPaise: number; kwh: number; holdMinutes: number; firstStartMin: number | null; lastTapMin: number | null } | null;
+  current: { costPaise: number; kwh: number; holdMinutes: number; firstStartMin: number | null; lastTapMin: number | null; peak15Kva: number | null };
+  recommended: { costPaise: number; kwh: number; holdMinutes: number; firstStartMin: number | null; lastTapMin: number | null; peak15Kva: number | null } | null;
   reordered: boolean;
   sequence: string[];
   /** Cost saved versus current practice, paise per tonne poured. */
@@ -379,10 +404,11 @@ export async function whatIf(db: DB, actor: Actor, planId: string, p: WhatIfPara
     availableToMin: clampN(p.availableToMin, 0, 1440),
     currentPracticeStartMin: clampN(p.currentPracticeStartMin, 0, 1440),
     allowReorder: p.allowReorder === true,
+    siteCapKva: p.siteCapKva === undefined ? undefined : p.siteCapKva === null || !Number.isFinite(p.siteCapKva) || p.siteCapKva <= 0 ? null : Math.min(1_000_000, p.siteCapKva),
   };
   const built = await buildInput(db, actor, planId, ov);
   const r = optimise(built.input);
-  const pick = (e: ScheduleEvaluation) => ({ costPaise: e.totals.costPaise, kwh: e.totals.kwh, holdMinutes: e.totals.holdMinutes, firstStartMin: e.totals.firstStartMin, lastTapMin: e.totals.lastTapMin });
+  const pick = (e: ScheduleEvaluation) => ({ costPaise: e.totals.costPaise, kwh: e.totals.kwh, holdMinutes: e.totals.holdMinutes, firstStartMin: e.totals.firstStartMin, lastTapMin: e.totals.lastTapMin, peak15Kva: e.totals.peak15Kva });
   const rec = r.recommended;
   return {
     label: "MODELLED",

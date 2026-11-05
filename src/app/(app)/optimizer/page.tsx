@@ -230,6 +230,7 @@ export default async function OptimizerPage(props: PageProps<"/optimizer">) {
                     availableFromMin: furnaceRow.availableFromMin,
                     availableToMin: furnaceRow.availableToMin,
                     currentPracticeStartMin: plan.currentPracticeStartMin,
+                    siteCapKva: actor.factory.siteCapKva,
                   }}
                 />
               </PanelBody>

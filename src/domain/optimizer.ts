@@ -52,6 +52,16 @@ export interface Downtime {
   reason: string;
 }
 
+/** The connection the furnace shares with the rest of the plant. */
+export interface SiteLoad {
+  /** Hard limit on total real power (base load + furnace), kW, checked every minute. Null = no cap. */
+  capKw: number | null;
+  /** Other plant load for each local minute of the plan day, kW (length 1440). */
+  baseLoadKw: ArrayLike<number>;
+  /** Converts kW to kVA for demand reporting. */
+  powerFactor: number;
+}
+
 export interface OptimizerInput {
   gridMinutes: number;
   heats: PlanHeat[];
@@ -84,6 +94,8 @@ export interface OptimizerInput {
    * Off by default: the sequence is then fixed as given.
    */
   allowReorder?: boolean;
+  /** Shared-connection limits. When absent, the furnace is scheduled as if it were alone on the connection. */
+  site?: SiteLoad;
 }
 
 export interface ScheduledHeat {
@@ -126,6 +138,11 @@ export interface ScheduleEvaluation {
     lastTapMin: number | null;
     meltMinutes: number;
     meltMinutesByPrice: Record<string, number>;
+    /**
+     * Highest 15-minute block-average demand of base load plus furnace, kVA, using the site
+     * power factor. Null when no site load is given. The usual billing-demand definition.
+     */
+    peak15Kva: number | null;
   };
   checks: ConstraintCheck[];
   feasible: boolean;
@@ -187,6 +204,50 @@ function overlapsDowntime(input: OptimizerInput, a: number, b: number): Downtime
 function orderDue(input: OptimizerInput, orderId: string | null): number {
   if (!orderId) return Infinity;
   return input.orders.find((o) => o.id === orderId)?.dueMin ?? Infinity;
+}
+
+const BLOCK = 15;
+
+/** Range-maximum queries over a 1440-minute series in O(1) after O(n log n) set-up. */
+function rangeMax(series: ArrayLike<number>): (a: number, b: number) => number {
+  const n = 1440;
+  const levels: Float64Array[] = [Float64Array.from({ length: n }, (_, i) => series[i] ?? 0)];
+  for (let k = 1; 1 << k <= n; k++) {
+    const prev = levels[k - 1];
+    const cur = new Float64Array(n - (1 << k) + 1);
+    for (let i = 0; i < cur.length; i++) cur[i] = Math.max(prev[i], prev[i + (1 << (k - 1))]);
+    levels.push(cur);
+  }
+  return (a, b) => {
+    const lo = Math.max(0, a);
+    const hi = Math.min(n, b);
+    if (hi <= lo) return -Infinity;
+    const k = 31 - Math.clz32(hi - lo);
+    return Math.max(levels[k][lo], levels[k][hi - (1 << k)]);
+  };
+}
+
+/** Furnace power for each local minute of the plan day, kW. */
+export function furnaceLoadProfile(input: OptimizerInput, items: Pick<ScheduledHeat, "startMin" | "meltEndMin" | "tapMin" | "meltKwh">[]): Float64Array {
+  const p = new Float64Array(1440);
+  for (const it of items) {
+    const melt = it.meltEndMin - it.startMin;
+    const meltKw = melt > 0 ? (it.meltKwh * 60) / melt : 0;
+    for (let m = Math.max(0, it.startMin); m < Math.min(1440, it.meltEndMin); m++) p[m] += meltKw;
+    for (let m = Math.max(0, it.meltEndMin); m < Math.min(1440, it.tapMin); m++) p[m] += input.process.holdingKw;
+  }
+  return p;
+}
+
+/** Highest 15-minute block-average of (base + furnace), kW. */
+function peakBlockKw(base: ArrayLike<number>, furnace: Float64Array): number {
+  let peak = 0;
+  for (let b = 0; b < 1440; b += BLOCK) {
+    let sum = 0;
+    for (let m = b; m < b + BLOCK; m++) sum += (base[m] ?? 0) + furnace[m];
+    peak = Math.max(peak, sum / BLOCK);
+  }
+  return peak;
 }
 
 /** Compute a schedule from given start times and check every hard constraint. */
@@ -322,7 +383,29 @@ export function evaluateSchedule(input: OptimizerInput, starts: number[]): Sched
       : `${tonnes.toFixed(2)} t poured covers ${input.orders.reduce((s, o) => s + o.requiredTonnes, 0).toFixed(2)} t ordered.`,
   );
 
+  let peak15Kva: number | null = null;
+  if (input.site) {
+    const furnace = furnaceLoadProfile(input, items);
+    const base = input.site.baseLoadKw;
+    peak15Kva = peakBlockKw(base, furnace) / Math.max(0.1, input.site.powerFactor);
+    if (input.site.capKw !== null) {
+      let worst = { m: -1, kw: 0 };
+      for (let m = 0; m < 1440; m++) {
+        const kw = (base[m] ?? 0) + furnace[m];
+        if (kw > input.site.capKw + 1e-6 && kw > worst.kw) worst = { m, kw };
+      }
+      add(
+        "site-cap",
+        "Site demand cap",
+        worst.m === -1,
+        worst.m === -1
+          ? `Base load plus furnace stays within ${input.site.capKw.toFixed(0)} kW (${(input.site.capKw / input.site.powerFactor).toFixed(0)} kVA) at every minute.`
+          : `At ${fmt(worst.m)} the connection would carry ${worst.kw.toFixed(0)} kW, above the ${input.site.capKw.toFixed(0)} kW limit.`,
+      );
+    }
+  }
   const totals = {
+    peak15Kva,
     kwh: items.reduce((s, it) => s + it.meltKwh + it.holdKwh, 0),
     meltKwh: items.reduce((s, it) => s + it.meltKwh, 0),
     holdKwh: items.reduce((s, it) => s + it.holdKwh, 0),
@@ -455,6 +538,8 @@ function solveDp(input: OptimizerInput, cand: number[][] | null): DpSolution {
   const fromMin = Math.ceil(input.furnace.availableFromMin / g) * g;
   const toMin = Math.min(input.furnace.availableToMin, 1440);
   const fromAny = cand ? input.furnace.availableFromMin : fromMin;
+  const capKw = input.site?.capKw ?? null;
+  const baseMax = capKw !== null && input.site ? rangeMax(input.site.baseLoadKw) : null;
 
   for (let k = 0; k < n; k++) {
     const h = input.heats[k];
@@ -484,6 +569,11 @@ function solveDp(input: OptimizerInput, cand: number[][] | null): DpSolution {
         if (hold > input.process.maxHoldMinutes) continue;
         if (overlapsDowntime(input, S, tap)) continue;
         const meltKwh = cold ? input.meltKwh[k].cold : input.meltKwh[k].warm;
+        if (baseMax && capKw !== null) {
+          // Hard site cap: base load plus the furnace's power must fit under it in every minute.
+          if (baseMax(S, M) + (meltKwh * 60) / melt > capKw + 1e-6) continue;
+          if (hold > 0 && baseMax(M, tap) + input.process.holdingKw > capKw + 1e-6) continue;
+        }
         const c = (priceSum(pre, S, M) * meltKwh) / melt + (priceSum(pre, M, tap) * input.process.holdingKw) / 60;
         const cc = { cost: (cell?.cost ?? 0) + c, hold: (cell?.hold ?? 0) + hold, prevTap, start: S };
         if (better(cc, layer[tap])) layer[tap] = cc;
@@ -668,6 +758,12 @@ export function optimise(input: OptimizerInput): OptimizerResult {
   if (bestTap === -1) {
     const early = earliestSchedule(input);
     const blocking: BlockingConstraint[] = [];
+    if (input.site && input.site.capKw !== null && solveDp({ ...input, site: { ...input.site, capKw: null } }, null).starts) {
+      blocking.push({
+        constraint: "Site demand cap",
+        detail: `A schedule exists only if the ${input.site.capKw.toFixed(0)} kW cap is relaxed: base load plus a melting furnace exceeds it at the times the other limits allow. Reduce other load at those times, raise the cap, or move production.`,
+      });
+    }
     let earliestPossible: ScheduleEvaluation | null = null;
     if (!early.starts) {
       blocking.push({ constraint: "Furnace availability", detail: early.failure ?? "Heats do not fit in the availability window." });
@@ -762,5 +858,46 @@ export function optimise(input: OptimizerInput): OptimizerResult {
     optimalityNote,
     sequence: recommended.items.map((i) => i.key),
     reordered,
+  };
+}
+
+export interface SiteResult {
+  status: "OPTIMAL" | "INFEASIBLE";
+  /** One result per furnace, in the order given. Stops at the first furnace that cannot be scheduled. */
+  furnaces: OptimizerResult[];
+  /** Highest 15-minute block-average demand of base load plus every furnace's recommended load, kVA. */
+  peak15Kva: number | null;
+  note: string;
+}
+
+/**
+ * Schedule several furnaces that share one connection. Furnaces are solved one after
+ * another in the order given: each sees the base load plus the recommended load of the
+ * furnaces before it, so the shared cap holds by construction. Earlier furnaces get first
+ * claim on the connection; this is a priority heuristic, not a joint optimum.
+ */
+export function optimiseSite(inputs: OptimizerInput[], site: SiteLoad): SiteResult {
+  const base = Float64Array.from({ length: 1440 }, (_, i) => site.baseLoadKw[i] ?? 0);
+  const total = new Float64Array(1440);
+  const furnaces: OptimizerResult[] = [];
+  let ok = true;
+  for (const input of inputs) {
+    const result = optimise({ ...input, site: { ...site, baseLoadKw: base } });
+    furnaces.push(result);
+    if (result.status !== "OPTIMAL" || !result.recommended) {
+      ok = false;
+      break;
+    }
+    const profile = furnaceLoadProfile(input, result.recommended.items);
+    for (let m = 0; m < 1440; m++) {
+      base[m] += profile[m];
+      total[m] += profile[m];
+    }
+  }
+  return {
+    status: ok ? "OPTIMAL" : "INFEASIBLE",
+    furnaces,
+    peak15Kva: ok ? peakBlockKw(site.baseLoadKw, total) / Math.max(0.1, site.powerFactor) : null,
+    note: "Furnaces are scheduled in the order given; earlier furnaces claim the connection first. A priority heuristic, not a joint optimum.",
   };
 }
