@@ -4,12 +4,12 @@ import * as React from "react";
 import { cn } from "@/lib/cn";
 
 export const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
         primary: "bg-ink text-on-ink hover:bg-ink/85",
-        brand: "brand-gradient text-white shadow-[0_8px_24px_-10px_var(--brand-2)] hover:brightness-110",
+        brand: "brand-gradient text-white hover:brightness-110",
         amber: "bg-amber-mark text-white hover:bg-amber",
         teal: "bg-teal text-white hover:bg-teal/90",
         danger: "bg-red text-white hover:bg-red/90",

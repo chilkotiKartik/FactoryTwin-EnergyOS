@@ -53,7 +53,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       />
       <div className="flex min-h-dvh flex-col">
         {actor.factory.isSimulation ? (
-          <div role="note" className="no-print sticky top-0 z-30 flex items-center justify-center gap-2 bg-[linear-gradient(90deg,#6d28d9,#4f46e5)] px-3 py-1 text-center text-[10.5px] font-semibold uppercase tracking-[0.14em] text-white">
+          <div role="note" className="no-print sticky top-0 z-30 flex items-center justify-center gap-2 bg-[#5b21b6] px-3 py-1 text-center text-[10.5px] font-semibold uppercase tracking-[0.14em] text-white">
             <span className="sm:hidden">Simulation · synthetic data</span>
             <span className="hidden sm:inline">Simulation — synthetic data — not field validation</span>
           </div>

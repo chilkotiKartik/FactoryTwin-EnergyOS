@@ -25,7 +25,8 @@ const VIEWPORTS = [
 
 async function check(page: Page, path: string, problems: string[], errors: string[]) {
   const before = errors.length;
-  const res = await page.goto(path, { waitUntil: "networkidle" });
+  const res = await page.goto(path, { waitUntil: "load" });
+  await page.waitForTimeout(250);
   const status = res?.status() ?? 0;
   // Pages a role may not open redirect or show "not found"; a 5xx is always a failure.
   if (status >= 500) problems.push(`${path}: HTTP ${status}`);
@@ -42,10 +43,13 @@ for (const vp of VIEWPORTS) {
       test(`${email} can open every screen`, async ({ page, context, baseURL }) => {
         test.setTimeout(240_000);
         await context.addCookies([{ name: "energyos_theme", value: vp.theme, url: baseURL! }]);
+        // External photos: refuse them so the run is fast and the "photo could not load" fallback is exercised.
+        await page.route("https://upload.wikimedia.org/**", (r) => r.abort());
         const errors: string[] = [];
         page.on("pageerror", (e) => errors.push(`page error: ${e.message}`));
         page.on("console", (m) => {
-          if (m.type() === "error") errors.push(`console: ${m.text()}`);
+          // The aborted photo requests above are expected; anything else is a failure.
+          if (m.type() === "error" && !/Failed to load resource: net::ERR_FAILED/.test(m.text())) errors.push(`console: ${m.text()}`);
         });
         await page.goto("/login");
         await page.fill("#email", email);
@@ -55,8 +59,10 @@ for (const vp of VIEWPORTS) {
         const problems: string[] = [];
         for (const r of ROUTES) await check(page, r, problems, errors);
         for (const [list, selector] of DETAILS) {
-          await page.goto(list, { waitUntil: "networkidle" });
-          const href = await page.locator(selector).first().getAttribute("href").catch(() => null);
+          await page.goto(list, { waitUntil: "load" });
+          // Only follow a detail link if the list has one (a fresh demo has no recommendations yet).
+          const link = page.locator(selector).first();
+          const href = (await link.count()) ? await link.getAttribute("href") : null;
           if (href) await check(page, href, problems, errors);
         }
         expect(problems, problems.join("\n")).toEqual([]);

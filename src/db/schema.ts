@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 /**
  * Schema notes
@@ -618,4 +618,24 @@ export const alerts = sqliteTable(
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("alerts_factory_key_uq").on(t.factoryId, t.dedupeKey), index("alerts_factory_time_idx").on(t.factoryId, t.createdAt)],
+);
+
+/**
+ * Public power-market prices (shared by every factory; not tenant data).
+ * One row per source, delivery date and 15-minute block. Refreshed by a server job.
+ */
+export const marketPrices = sqliteTable(
+  "market_prices",
+  {
+    source: text("source").notNull(),
+    deliveryDate: text("delivery_date").notNull(),
+    block: integer("block").notNull(),
+    startMin: integer("start_min").notNull(),
+    mcpRsPerMwh: real("mcp_rs_per_mwh").notNull(),
+    mcvMw: real("mcv_mw").notNull(),
+    purchaseBidMw: real("purchase_bid_mw").notNull(),
+    sellBidMw: real("sell_bid_mw").notNull(),
+    fetchedAt: integer("fetched_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.source, t.deliveryDate, t.block] })],
 );

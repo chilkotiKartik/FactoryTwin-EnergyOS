@@ -33,7 +33,7 @@ export function Sidebar({ factoryName, isSimulation, pendingApprovals, canSeeAud
               return (
                 <li key={it.href} className="relative">
                   {active ? (
-                    <motion.span layoutId="nav-active" className="absolute inset-0 rounded-lg bg-white/[0.07] ring-1 ring-white/10" transition={{ type: "spring", stiffness: 500, damping: 40 }} aria-hidden>
+                    <motion.span layoutId="nav-active" className="absolute inset-0 rounded-lg bg-white/[0.07]" transition={{ type: "spring", stiffness: 500, damping: 40 }} aria-hidden>
                       <span className="brand-gradient absolute inset-y-1.5 left-0 w-[3px] rounded-full" />
                     </motion.span>
                   ) : null}
@@ -64,7 +64,7 @@ export function Sidebar({ factoryName, isSimulation, pendingApprovals, canSeeAud
 
   const brand = (
     <Link href="/dashboard" className="flex items-center gap-3 px-5 pb-5 pt-5">
-      <div className="brand-gradient grid size-9 place-items-center rounded-xl shadow-[0_8px_24px_-8px_var(--brand-2)]">
+      <div className="brand-gradient grid size-9 place-items-center rounded-lg">
         <Zap className="size-[18px] text-white" aria-hidden />
       </div>
       <div className="min-w-0">
@@ -87,7 +87,7 @@ export function Sidebar({ factoryName, isSimulation, pendingApprovals, canSeeAud
     </div>
   );
 
-  const shellBg = "bg-shell bg-[radial-gradient(40rem_20rem_at_0%_0%,rgb(99_102_241/0.18),transparent_60%)]";
+  const shellBg = "bg-shell";
 
   // Phone bottom bar: the four places used most on the floor, plus "More" for the full menu.
   const tabs: { href: string; label: MessageKey; icon: typeof Flame }[] = [

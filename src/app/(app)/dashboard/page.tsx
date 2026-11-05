@@ -17,6 +17,10 @@ import { Evidence, Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty";
 import { Button } from "@/components/ui/button";
 import { DecisionLoop } from "@/components/dashboard/decision-loop";
+import { MarketCard } from "@/components/market/market-card";
+import { latestMarketDay, marketFeedEnabled } from "@/server/services/market";
+import { listTariffVersions } from "@/server/services/tariffs";
+import { Photo } from "@/components/ui/photo";
 import { EnergyTimeline } from "@/components/charts/energy-timeline";
 import { SecByHeat } from "@/components/charts/sec-by-heat";
 import { DailyTrend } from "@/components/charts/daily-trend";
@@ -39,7 +43,8 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
     return (
       <>
         <PageHeader title="Operations dashboard" crumbs={[{ label: actor.factory.name }, { label: "Dashboard" }]} />
-        <Panel>
+        <Panel className="overflow-hidden">
+          <Photo name="casting" credit="overlay" className="h-48 sm:h-64" />
           <EmptyState icon={Gauge} title="No production data yet" action={<Button asChild><Link href="/meters">Import meter data</Link></Button>}>
             This factory has no heats or meter readings. Import a meter CSV and log heats on the Heat log, or connect a meter through the ingest API (see Factory settings).
           </EmptyState>
@@ -56,7 +61,8 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
     dailySeries(db, actor, addDays(day, -29), day),
     db.query.productionPlans.findFirst({ where: eq(productionPlans.factoryId, actor.factory.id), orderBy: desc(productionPlans.planDate) }),
   ]);
-  const loop = await decisionLoop(db, actor, daySum ?? sum);
+  const [loop, market, tariffs] = await Promise.all([decisionLoop(db, actor, daySum ?? sum), latestMarketDay(db), listTariffVersions(db, actor)]);
+  const solarPeriod = tariffs[0]?.periods.find((p) => p.kind === "SOLAR") ?? null;
   const run = plan ? await db.query.optimizationRuns.findFirst({ where: eq(optimizationRuns.planId, plan.id), orderBy: desc(optimizationRuns.createdAt) }) : null;
   const runResult = run?.status === "OPTIMAL" ? (run.result as { current: { totals: Totals }; recommended: { totals: Totals } }) : null;
 
@@ -99,6 +105,8 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
       </Panel>
 
       <BenchmarkStrip sec={sum.sec} holdingPct={holdingPct} solarShare={solarShare(sum.costByKind)} />
+
+      <MarketCard day={market} solar={solarPeriod ? { startMin: solarPeriod.startMin, endMin: solarPeriod.endMin } : null} timeZone={actor.factory.timeZone} feedOn={marketFeedEnabled()} />
 
       <Panel className="mb-5">
         <div className="grid grid-cols-2 divide-line sm:grid-cols-3 lg:grid-cols-5 [&>*]:border-b [&>*]:border-line lg:[&>*:nth-child(n+6)]:border-b-0">

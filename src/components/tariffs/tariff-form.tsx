@@ -57,7 +57,7 @@ export function TariffForm({ initial, defaultEffective }: { initial: { name: str
         </div>
         <ul className="flex flex-col gap-2">
           {periods.map((p, i) => (
-            <li key={i} className="grid grid-cols-2 gap-2 sm:grid-cols-[120px_minmax(0,1fr)_90px_90px_90px_36px]">
+            <li key={i} className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_36px]">
               <Select value={p.kind} onChange={(e) => upd(i, "kind", e.target.value)} aria-label="Window type">
                 <option value="SOLAR">Solar</option>
                 <option value="PEAK">Peak</option>

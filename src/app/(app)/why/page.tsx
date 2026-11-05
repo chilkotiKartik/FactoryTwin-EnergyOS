@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 import { SavingsCalculator } from "@/components/why/savings-calculator";
+import { Photo } from "@/components/ui/photo";
 import { fmt } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Why EnergyOS" };
@@ -130,17 +131,17 @@ export default async function WhyPage() {
         description="What the problem is, how big it is, and why each part of this product exists — with the source for every number. Figures from different sources disagree; where they do, both are shown."
       />
 
-      <section className="relative mb-6 overflow-hidden rounded-3xl border border-line bg-shell p-6 text-shell-ink sm:p-8">
-        <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(36rem_18rem_at_0%_0%,rgb(99_102_241/0.35),transparent_60%),radial-gradient(30rem_16rem_at_100%_100%,rgb(6_182_212/0.25),transparent_60%)]" />
-        <div className="relative max-w-3xl">
-          <Badge className="border-white/15 bg-white/10 text-white">The problem in one line</Badge>
-          <p className="mt-4 text-[22px] font-semibold leading-snug tracking-tight text-white sm:text-[28px]">
+      <section className="card mb-8 grid overflow-hidden rounded-2xl border border-line bg-surface lg:grid-cols-[1.1fr_1fr]">
+        <div className="p-6 sm:p-8">
+          <Badge tone="neutral">The problem in one line</Badge>
+          <p className="mt-4 text-[22px] font-semibold leading-snug tracking-tight text-ink sm:text-[26px]">
             A monthly bill shows <span className="brand-text">how much</span> a foundry spent on power — never <span className="brand-text">which heat, which wait, or which hour</span> made a tonne expensive.
           </p>
-          <p className="mt-4 max-w-2xl text-[14px] leading-relaxed text-shell-ink">
+          <p className="mt-4 max-w-2xl text-[14px] leading-relaxed text-ink-2">
             EnergyOS links one-minute meter data to every heat, finds the energy lost holding metal while moulds catch up, and proposes start times that remove the wait and land melting in cheaper hours — for a supervisor to approve, then verifies the result per tonne.
           </p>
         </div>
+        <Photo name="casting" credit="overlay" priority className="min-h-64 lg:min-h-full" />
       </section>
 
       <h2 className="mb-3 text-[13px] font-semibold uppercase tracking-[0.14em] text-ink-3">The evidence</h2>
@@ -150,7 +151,7 @@ export default async function WhyPage() {
           return (
             <article key={e.value} className="card flex flex-col rounded-2xl border border-line bg-surface p-5">
               <div className="flex items-center gap-3">
-                <span className="grid size-10 place-items-center rounded-xl border border-line bg-surface-2 text-[var(--brand-2)]">
+                <span className="grid size-10 place-items-center rounded-lg border border-line bg-surface-2 text-[var(--brand-1)]">
                   <Icon className="size-5" aria-hidden />
                 </span>
                 <span className="num text-[24px] font-semibold tracking-tight">{e.value}</span>
@@ -183,7 +184,7 @@ export default async function WhyPage() {
           const Icon = a.icon;
           return (
             <Link key={a.title} href={a.href} className="card group flex gap-4 rounded-2xl border border-line bg-surface p-4 transition-transform hover:-translate-y-0.5">
-              <span className="brand-gradient grid size-10 shrink-0 place-items-center rounded-xl text-white">
+              <span className="grid size-10 shrink-0 place-items-center rounded-lg border border-line bg-surface-2 text-[var(--brand-1)]">
                 <Icon className="size-5" aria-hidden />
               </span>
               <span>

@@ -99,5 +99,16 @@ export function startBackgroundJobs() {
     every(30_000, "audit-seal", () => sealAuditChain(getDb()));
     every(5 * 60_000, "meter-health", () => checkMeterHealth(getDb()));
     every(60 * 60_000, "session-cleanup", () => getDb().delete(sessions).where(lt(sessions.expiresAt, Date.now())));
+    // Public India power-market prices (IEX day-ahead): shortly after start, then every 30 minutes.
+    const { marketFeedEnabled, refreshIexDam } = await import("./market");
+    if (marketFeedEnabled()) {
+      const market = () =>
+        refreshIexDam(getDb()).then((r) => {
+          if (!r.ok) console.warn(`[energyos] market feed: ${r.reason}`);
+        });
+      const first = setTimeout(() => void market().catch((e) => console.error("[energyos] job market-feed failed", e)), 15_000);
+      first.unref?.();
+      every(30 * 60_000, "market-feed", market);
+    }
   })();
 }

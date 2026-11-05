@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Zap } from "lucide-react";
 import { currentActor } from "@/server/auth/session-next";
+import { Photo } from "@/components/ui/photo";
+import { PHOTOS } from "@/lib/photos";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = { title: "Sign in" };
@@ -33,22 +35,22 @@ export default async function LoginPage() {
   return (
     <main className="grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
       <section className="relative hidden overflow-hidden bg-shell p-10 text-shell-ink lg:flex lg:flex-col lg:justify-between">
-        <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(40rem_24rem_at_10%_0%,rgb(99_102_241/0.35),transparent_60%),radial-gradient(30rem_20rem_at_100%_100%,rgb(6_182_212/0.25),transparent_60%)]" />
-        <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.07] [background-image:linear-gradient(#fff_1px,transparent_1px),linear-gradient(90deg,#fff_1px,transparent_1px)] [background-size:40px_40px]" />
+        <Photo name="moulds" credit="none" priority className="absolute inset-0" imgClassName="opacity-40" />
+        <div aria-hidden className="absolute inset-0 bg-shell/60" />
         <div className="relative flex items-center gap-3 text-white">
-          <div className="brand-gradient grid size-10 place-items-center rounded-xl shadow-[0_8px_32px_-8px_var(--brand-2)]">
+          <div className="brand-gradient grid size-10 place-items-center rounded-lg">
             <Zap className="size-5" aria-hidden />
           </div>
           <span className="text-[16px] font-semibold tracking-tight">
-            FactoryTwin <span className="brand-text">EnergyOS</span>
+            FactoryTwin <span className="text-[#fdba74]">EnergyOS</span>
           </span>
         </div>
         <div className="relative max-w-xl">
-          <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-1)]">Heat-level energy intelligence · induction foundries</p>
+          <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[#fdba74]">Heat-level energy intelligence · induction foundries</p>
           <h1 className="mt-4 text-[38px] font-semibold leading-[1.1] tracking-tight text-white">Know what every heat should have used — and plan the next shift around it.</h1>
           <dl className="mt-8 grid grid-cols-3 gap-3">
             {FACTS.map((f) => (
-              <div key={f.value} className="rounded-xl border border-white/10 bg-white/[0.04] p-3 backdrop-blur">
+              <div key={f.value} className="rounded-lg border border-white/15 bg-black/40 p-3">
                 <dt className="sr-only">{f.label}</dt>
                 <dd>
                   <span className="num block text-[22px] font-semibold text-white">{f.value}</span>
@@ -61,15 +63,20 @@ export default async function LoginPage() {
           <ol className="mt-8 grid grid-cols-2 gap-x-6 gap-y-3 text-[14px]">
             {STEPS.map((s, i) => (
               <li key={s} className="flex gap-2.5">
-                <span className="num mt-px text-[12px] font-semibold text-[var(--brand-1)]">{String(i + 1).padStart(2, "0")}</span>
+                <span className="num mt-px text-[12px] font-semibold text-[#fdba74]">{String(i + 1).padStart(2, "0")}</span>
                 <span>{s}</span>
               </li>
             ))}
           </ol>
         </div>
-        <p className="relative max-w-lg text-[12px] text-shell-muted">
-          Recommendation only. Nothing in this application sends commands to plant equipment. The demonstration factory runs on synthetic data and is labelled as such everywhere.
-        </p>
+        <div className="relative">
+          <p className="max-w-lg text-[12px] text-shell-ink">
+            Recommendation only. Nothing in this application sends commands to plant equipment. The demonstration factory runs on synthetic data and is labelled as such everywhere.
+          </p>
+          <p className="mt-3 text-[10.5px] text-shell-muted">
+            Photo: women making wax moulds for metal casting, {PHOTOS.moulds.place} · {PHOTOS.moulds.author}, {PHOTOS.moulds.licence}, via Wikimedia Commons
+          </p>
+        </div>
       </section>
       <section className="flex items-center justify-center px-4 py-10 sm:px-8">
         <div className="w-full max-w-sm animate-[slideUp_280ms_ease-out]">

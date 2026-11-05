@@ -46,6 +46,10 @@ The Electricity (Rights of Consumers) Amendment Rules, 2023 ([PIB](https://pib.g
 
 **Why it matters:** the same melt costs about a third less in solar hours than in the evening peak (₹6.40 vs ₹9.60 in the illustrative tariff). Moving the first start to remove holding *and* land melting in solar hours is the core recommendation. Because tariffs differ by state, every tariff in the app is versioned and labelled ASSUMPTION until a real tariff order is entered and marked VERIFIED.
 
+### A live check (5 Nov 2026)
+
+On the day this page was written, the IEX Day-Ahead Market cleared at an average of ₹5.16/kWh across 96 blocks; the cheapest four hours were 10:15–14:15 at ₹1.17/kWh and the dearest 17:00–21:00 at ₹10.00/kWh (the price ceiling) — an ₹8.83/kWh spread between solar noon and the evening peak. The page's own published average (₹5,158.67/MWh) matches what EnergyOS computes from the 96 blocks. Source: [IEX DAM market snapshot](https://www.iexindia.com/market-data/day-ahead-market/market-snapshot). The app now shows this curve live every day.
+
 ## 5. Emissions
 
 - India's grid weighted-average emission factor for FY 2023-24 is commonly cited as 0.727 tCO₂/MWh (renewable-adjusted). ([Saur Energy on the CEA database](https://www.saurenergy.com/solar-energy-news/ceas-co2-baseline-database-impact-of-re-on-indian-grid-emissions-intensity))

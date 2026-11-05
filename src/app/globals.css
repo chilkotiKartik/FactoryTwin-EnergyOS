@@ -1,73 +1,73 @@
 @import "tailwindcss";
 
 /*
- * FactoryTwin EnergyOS design tokens ("control room").
- * Cool neutral workspace, cyan→indigo brand accent, amber = energy waste or
- * opportunity, teal = verified good outcome, red = critical. Light and dark
+ * FactoryTwin EnergyOS design tokens.
+ * Warm neutral workspace, charcoal shell, one solid burnt-orange accent (molten
+ * metal), amber = energy waste or opportunity, teal = verified good outcome,
+ * red = critical. No gradients or glows: plain, legible, print-friendly. Light and dark
  * themes share every token name; components never hard-code colours.
  * Theme: <html data-theme="light|dark">, or no attribute to follow the system.
  */
 :root {
   color-scheme: light;
-  --shell: #0a1020;
-  --shell-2: #121a2e;
-  --shell-3: #1c2742;
-  --shell-ink: #d6ddeb;
-  --shell-muted: #8592ad;
-  --canvas: #f4f6fa;
+  --shell: #17181b;
+  --shell-2: #202227;
+  --shell-3: #2b2e34;
+  --shell-ink: #e4e2dc;
+  --shell-muted: #9a978e;
+  --canvas: #f6f5f1;
   --surface: #ffffff;
-  --surface-2: #f8fafc;
-  --surface-3: #eef2f7;
-  --line: #e2e8f0;
-  --line-strong: #cbd5e1;
-  --ink: #0b1220;
-  --ink-2: #475569;
-  --ink-3: #64748b;
+  --surface-2: #faf9f6;
+  --surface-3: #f0eee9;
+  --line: #e6e3dc;
+  --line-strong: #d3cfc5;
+  --ink: #1a1a17;
+  --ink-2: #4f4d46;
+  --ink-3: #706d65;
   --on-ink: #ffffff;
-  --amber: #b45309;
-  --amber-mark: #f59e0b;
-  --amber-soft: #fef3c7;
+  --amber: #a16207;
+  --amber-mark: #eab308;
+  --amber-soft: #fef9c3;
   --teal: #0f766e;
   --teal-mark: #14b8a6;
   --teal-soft: #ccfbf1;
   --red: #b91c1c;
   --red-mark: #ef4444;
   --red-soft: #fee2e2;
-  --blue: #2563eb;
+  --blue: #1d4ed8;
   --blue-soft: #dbeafe;
   --violet: #6d28d9;
-  --brand-1: #06b6d4;
-  --brand-2: #6366f1;
-  --band-solar: #fef6d8;
+  --brand-1: #c2410c;
+  --brand-2: #c2410c;
+  --on-brand: #ffffff;
+  --band-solar: #fdf6d8;
   --band-peak: #fde4e4;
   --band-offpeak: #e0ecfd;
-  --focus: #2563eb;
-  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 4px 16px -6px rgb(15 23 42 / 0.08);
-  --shadow-pop: 0 24px 48px -12px rgb(15 23 42 / 0.25);
-  --grid-line: rgb(15 23 42 / 0.035);
-  --glow: rgb(99 102 241 / 0.10);
+  --focus: #1d4ed8;
+  --shadow-card: 0 1px 2px rgb(23 24 27 / 0.05);
+  --shadow-pop: 0 16px 40px -12px rgb(23 24 27 / 0.25);
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --shell: #050812;
-  --shell-2: #0c1222;
-  --shell-3: #162038;
-  --shell-ink: #d6ddeb;
-  --shell-muted: #7f8bab;
-  --canvas: #060a14;
-  --surface: #0d1424;
-  --surface-2: #111a2d;
-  --surface-3: #18233a;
-  --line: #1f2b44;
-  --line-strong: #2f3e5e;
-  --ink: #e8edf7;
-  --ink-2: #aab5ca;
-  --ink-3: #8090ab;
-  --on-ink: #0b1220;
-  --amber: #fbbf24;
-  --amber-mark: #f59e0b;
-  --amber-soft: #2b2010;
+  --shell: #0e0f11;
+  --shell-2: #18191c;
+  --shell-3: #23252a;
+  --shell-ink: #e4e2dc;
+  --shell-muted: #8e8b83;
+  --canvas: #131416;
+  --surface: #1b1c1f;
+  --surface-2: #202226;
+  --surface-3: #272a2f;
+  --line: #2e3136;
+  --line-strong: #3d4148;
+  --ink: #ecebe7;
+  --ink-2: #b7b4ac;
+  --ink-3: #8e8b83;
+  --on-ink: #131416;
+  --amber: #facc15;
+  --amber-mark: #eab308;
+  --amber-soft: #2a2408;
   --teal: #2dd4bf;
   --teal-mark: #14b8a6;
   --teal-soft: #0b2b29;
@@ -77,39 +77,38 @@
   --blue: #60a5fa;
   --blue-soft: #0f2140;
   --violet: #a78bfa;
-  --brand-1: #22d3ee;
-  --brand-2: #818cf8;
-  --band-solar: #2a2410;
+  --brand-1: #fb923c;
+  --brand-2: #fb923c;
+  --on-brand: #1a1a17;
+  --band-solar: #2a2510;
   --band-peak: #2e1519;
   --band-offpeak: #0f2140;
   --focus: #60a5fa;
-  --shadow-card: 0 0 0 1px rgb(255 255 255 / 0.02), 0 8px 24px -10px rgb(0 0 0 / 0.6);
-  --shadow-pop: 0 24px 64px -12px rgb(0 0 0 / 0.7);
-  --grid-line: rgb(148 163 184 / 0.05);
-  --glow: rgb(34 211 238 / 0.10);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-pop: 0 16px 48px -12px rgb(0 0 0 / 0.7);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --shell: #050812;
-    --shell-2: #0c1222;
-    --shell-3: #162038;
-    --shell-ink: #d6ddeb;
-    --shell-muted: #7f8bab;
-    --canvas: #060a14;
-    --surface: #0d1424;
-    --surface-2: #111a2d;
-    --surface-3: #18233a;
-    --line: #1f2b44;
-    --line-strong: #2f3e5e;
-    --ink: #e8edf7;
-    --ink-2: #aab5ca;
-    --ink-3: #8090ab;
-    --on-ink: #0b1220;
-    --amber: #fbbf24;
-    --amber-mark: #f59e0b;
-    --amber-soft: #2b2010;
+    --shell: #0e0f11;
+    --shell-2: #18191c;
+    --shell-3: #23252a;
+    --shell-ink: #e4e2dc;
+    --shell-muted: #8e8b83;
+    --canvas: #131416;
+    --surface: #1b1c1f;
+    --surface-2: #202226;
+    --surface-3: #272a2f;
+    --line: #2e3136;
+    --line-strong: #3d4148;
+    --ink: #ecebe7;
+    --ink-2: #b7b4ac;
+    --ink-3: #8e8b83;
+    --on-ink: #131416;
+    --amber: #facc15;
+    --amber-mark: #eab308;
+    --amber-soft: #2a2408;
     --teal: #2dd4bf;
     --teal-mark: #14b8a6;
     --teal-soft: #0b2b29;
@@ -119,16 +118,15 @@
     --blue: #60a5fa;
     --blue-soft: #0f2140;
     --violet: #a78bfa;
-    --brand-1: #22d3ee;
-    --brand-2: #818cf8;
-    --band-solar: #2a2410;
+    --brand-1: #fb923c;
+    --brand-2: #fb923c;
+    --on-brand: #1a1a17;
+    --band-solar: #2a2510;
     --band-peak: #2e1519;
     --band-offpeak: #0f2140;
     --focus: #60a5fa;
-    --shadow-card: 0 0 0 1px rgb(255 255 255 / 0.02), 0 8px 24px -10px rgb(0 0 0 / 0.6);
-    --shadow-pop: 0 24px 64px -12px rgb(0 0 0 / 0.7);
-    --grid-line: rgb(148 163 184 / 0.05);
-    --glow: rgb(34 211 238 / 0.10);
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-pop: 0 16px 48px -12px rgb(0 0 0 / 0.7);
   }
 }
 
@@ -170,12 +168,6 @@
 
 body {
   background-color: var(--canvas);
-  background-image:
-    radial-gradient(60rem 30rem at 85% -10%, var(--glow), transparent 60%),
-    linear-gradient(var(--grid-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-  background-size: auto, 32px 32px, 32px 32px;
-  background-attachment: fixed;
   color: var(--ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
@@ -192,15 +184,13 @@ body {
   outline-offset: 2px;
 }
 
-/* Brand gradient helpers */
+/* Accent helpers (solid colour; the old names are kept so markup stays stable) */
 .brand-gradient {
-  background-image: linear-gradient(135deg, var(--brand-1), var(--brand-2));
+  background-color: var(--brand-1);
+  color: var(--on-brand);
 }
 .brand-text {
-  background-image: linear-gradient(90deg, var(--brand-1), var(--brand-2));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--brand-1);
 }
 .card {
   box-shadow: var(--shadow-card);
@@ -237,43 +227,42 @@ input[type="range"] {
 @media print {
   :root, :root[data-theme] {
     color-scheme: light;
-    --shell: #0a1020;
-    --shell-2: #121a2e;
-    --shell-3: #1c2742;
-    --shell-ink: #d6ddeb;
-    --shell-muted: #8592ad;
-    --canvas: #f4f6fa;
+    --shell: #17181b;
+    --shell-2: #202227;
+    --shell-3: #2b2e34;
+    --shell-ink: #e4e2dc;
+    --shell-muted: #9a978e;
+    --canvas: #f6f5f1;
     --surface: #ffffff;
-    --surface-2: #f8fafc;
-    --surface-3: #eef2f7;
-    --line: #e2e8f0;
-    --line-strong: #cbd5e1;
-    --ink: #0b1220;
-    --ink-2: #475569;
-    --ink-3: #64748b;
+    --surface-2: #faf9f6;
+    --surface-3: #f0eee9;
+    --line: #e6e3dc;
+    --line-strong: #d3cfc5;
+    --ink: #1a1a17;
+    --ink-2: #4f4d46;
+    --ink-3: #706d65;
     --on-ink: #ffffff;
-    --amber: #b45309;
-    --amber-mark: #f59e0b;
-    --amber-soft: #fef3c7;
+    --amber: #a16207;
+    --amber-mark: #eab308;
+    --amber-soft: #fef9c3;
     --teal: #0f766e;
     --teal-mark: #14b8a6;
     --teal-soft: #ccfbf1;
     --red: #b91c1c;
     --red-mark: #ef4444;
     --red-soft: #fee2e2;
-    --blue: #2563eb;
+    --blue: #1d4ed8;
     --blue-soft: #dbeafe;
     --violet: #6d28d9;
-    --brand-1: #06b6d4;
-    --brand-2: #6366f1;
-    --band-solar: #fef6d8;
+    --brand-1: #c2410c;
+    --brand-2: #c2410c;
+    --on-brand: #ffffff;
+    --band-solar: #fdf6d8;
     --band-peak: #fde4e4;
     --band-offpeak: #e0ecfd;
-    --focus: #2563eb;
-    --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 4px 16px -6px rgb(15 23 42 / 0.08);
-    --shadow-pop: 0 24px 48px -12px rgb(15 23 42 / 0.25);
-    --grid-line: rgb(15 23 42 / 0.035);
-    --glow: rgb(99 102 241 / 0.10);
+    --focus: #1d4ed8;
+    --shadow-card: 0 1px 2px rgb(23 24 27 / 0.05);
+    --shadow-pop: 0 16px 40px -12px rgb(23 24 27 / 0.25);
   }
   body {
     background: #fff;

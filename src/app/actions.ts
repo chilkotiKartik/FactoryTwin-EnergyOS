@@ -277,3 +277,13 @@ export async function setLocaleAction(locale: string): Promise<ActionResult> {
   revalidatePath("/", "layout");
   return { ok: true };
 }
+
+/** Fetch today's IEX prices now (throttled to once per five minutes for everyone). */
+export async function refreshMarketAction(): Promise<ActionResult<{ date: string } | null>> {
+  return withActor(async (db) => {
+    const { refreshIexDam } = await import("@/server/services/market");
+    const r = await refreshIexDam(db);
+    if (!r.ok) throw new AppError("VALIDATION", r.reason);
+    return { date: r.date };
+  });
+}

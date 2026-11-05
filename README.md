@@ -18,7 +18,9 @@ EnergyOS is **advisory only**. It never sends a command to a furnace or any othe
 ## What's inside
 
 - **Why EnergyOS** (`/why`): the sourced evidence for the problem (sector size, energy share of cost, melting norms, holding losses, 2023 ToD tariff rules) and a savings calculator that starts from the factory's own last 30 days. Full references in [docs/RESEARCH.md](docs/RESEARCH.md).
-- **Control-room interface**: light and dark themes (follows the device unless chosen in the account menu), a phone bottom bar with the four most-used screens, a ⌘K / Ctrl+K command palette, and a benchmark strip on the dashboard comparing the day with the CII melting norm.
+- **Plain, legible interface**: light and dark themes (follows the device unless chosen in the account menu), a phone bottom bar with the four most-used screens, a ⌘K / Ctrl+K command palette, and a benchmark strip on the dashboard comparing the day with the CII melting norm.
+- **Live India power market**: the server reads the Indian Energy Exchange's public Day-Ahead Market prices (96 fifteen-minute blocks) shortly after start and every 30 minutes, stores them, and the dashboard shows today's curve, the cheapest and dearest four hours, and how they line up with the plant's solar-hour tariff window. Strict parsing: a changed or partial page is ignored, the last good day is kept.
+- **Real photographs from India** with their licence credits ([docs/CREDITS.md](docs/CREDITS.md)).
 - **Every screen is smoke-tested** as every role, on a desktop and a phone, in both themes (`tests/e2e/smoke.spec.ts`).
 
 ## Quick start
@@ -69,6 +71,7 @@ Sign in with any demo account (password `energyos-demo`, set by `DEMO_PASSWORD`)
 | `ANALYSIS_DEBOUNCE_MS` | `60000` | Delay before re-analysing a factory after new meter data arrives through the ingest API |
 | `ALLOW_PRIVATE_WEBHOOKS` | `false` | Allow alert webhooks to private hosts or plain HTTP (an internal SMS/WhatsApp gateway) |
 | `DATABASE_AUTH_TOKEN` | – | Token for a hosted libSQL / Turso `DATABASE_URL` (ignored for local files) |
+| `INDIA_MARKET_FEED` | `iex` | `off` stops reading IEX prices (for a plant network without internet). If the server reaches the internet through a proxy, start Node with `NODE_USE_ENV_PROXY=1` (Node 22.21+). |
 | `ENERGYOS_JOBS` | `true` | `false` turns off the background jobs (audit sealing, meter-offline alerts, session cleanup) |
 
 The server refuses to start with `COOKIE_SECURE=true`, demo users and the default demo password.
