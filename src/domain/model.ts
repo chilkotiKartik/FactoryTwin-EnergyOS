@@ -147,3 +147,49 @@ export function expectedGoodPracticeKwh(model: EnergyModel, f: Pick<HeatFeatures
 export function predictKwh(model: EnergyModel, f: HeatFeatures): number {
   return expectedGoodPracticeKwh(model, f) + model.coefficients.perHoldMinute * f.holdMinutes;
 }
+
+export interface PredictionTerm {
+  key: "intercept" | "charge" | "coldStart" | "holding";
+  label: string;
+  kwh: number;
+}
+
+export interface PredictionExplanation {
+  terms: PredictionTerm[];
+  /** Sum of every term except holding: the good-practice expectation. */
+  expectedGoodPracticeKwh: number;
+  /** Full prediction including holding. */
+  predictedKwh: number;
+  /** Approximate 95% range around the good-practice expectation (±1.96 × robust residual scale); null without a fitted scale. */
+  rangeKwh: { low: number; high: number } | null;
+  /** Where the observed value sits relative to the range, in robust standard deviations of the fit. */
+  zScore: number | null;
+  /** The observed value, when supplied. */
+  actualKwh: number | null;
+}
+
+/**
+ * Break a prediction into the contribution of each model term, and place an
+ * observed energy figure against the model's typical scatter. Descriptive only:
+ * it explains the fit, it does not identify physical causes.
+ */
+export function explainPrediction(model: EnergyModel, f: HeatFeatures, actualKwh: number | null = null): PredictionExplanation {
+  const c = model.coefficients;
+  const terms: PredictionTerm[] = [
+    { key: "intercept", label: "Fixed (per heat)", kwh: c.intercept },
+    { key: "charge", label: `Charge ${f.chargeTonnes.toFixed(2)} t`, kwh: c.perTonne * f.chargeTonnes },
+    { key: "coldStart", label: "Cold start", kwh: f.coldStart ? c.coldStart : 0 },
+    { key: "holding", label: `Holding ${Math.round(f.holdMinutes)} min`, kwh: c.perHoldMinute * f.holdMinutes },
+  ];
+  const good = terms.filter((t) => t.key !== "holding").reduce((s, t) => s + t.kwh, 0);
+  const sd = model.rmseKwh;
+  const hasScale = sd !== null && sd > 0;
+  return {
+    terms,
+    expectedGoodPracticeKwh: good,
+    predictedKwh: good + terms[3].kwh,
+    rangeKwh: hasScale ? { low: good - 1.96 * sd, high: good + 1.96 * sd } : null,
+    zScore: hasScale && actualKwh !== null ? (actualKwh - good) / sd : null,
+    actualKwh,
+  };
+}

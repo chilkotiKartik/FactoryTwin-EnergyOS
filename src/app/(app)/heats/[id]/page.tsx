@@ -9,6 +9,8 @@ import { dayTrace } from "@/server/services/analytics";
 import { requireFurnace } from "@/server/services/common";
 import { can } from "@/server/permissions";
 import { ANOMALY_RULE_TEXT } from "@/domain/anomaly";
+import { explainPrediction } from "@/domain/model";
+import { ModelBreakdown } from "@/components/heats/model-breakdown";
 import { localDayStart } from "@/domain/time";
 import { PageHeader } from "@/components/ui/page-header";
 import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
@@ -46,6 +48,9 @@ export default async function HeatPage(props: PageProps<"/heats/[id]">) {
   const kwh = h.meterKwh ?? h.manualKwh;
   const anomaly = detail?.anomaly;
   const model = detail?.model;
+  const explained = model
+    ? explainPrediction(model, { chargeTonnes: h.chargeKg / 1000, coldStart: h.coldStart ?? false, holdMinutes: a?.holdingMinutes ?? h.holdingMinutes ?? 0 }, kwh ?? null)
+    : null;
 
   const events = [
     { t: h.startAt, label: "Melt started (heat log)", tone: "ink" },
@@ -228,6 +233,14 @@ export default async function HeatPage(props: PageProps<"/heats/[id]">) {
           </PanelBody>
         </Panel>
       </div>
+      {model && explained ? (
+        <Panel className="mt-5">
+          <PanelHeader title="Where the expected energy comes from" subtitle="Each term of the model for this heat. Descriptive only: it explains the fit, not physical causes." />
+          <PanelBody>
+            <ModelBreakdown x={explained} kind={model.kind} n={model.n} />
+          </PanelBody>
+        </Panel>
+      ) : null}
       {h.operatorNotes ? (
         <Panel className="mt-5">
           <PanelHeader title="Operator note" />
