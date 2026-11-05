@@ -90,3 +90,23 @@ describe("optimality against brute force", () => {
     expect(r.recommended!.totals.holdMinutes).toBe(best!.hold);
   });
 });
+
+describe("1-minute refinement", () => {
+  it("is never worse than current practice when that schedule is feasible", () => {
+    for (const startMin of [360, 361, 367, 373]) {
+      const input = deckInput({ currentPracticeStartMin: startMin });
+      const r = optimise(input);
+      if (r.status !== "OPTIMAL" || !r.current.feasible) continue;
+      expect(r.recommended!.totals.costPaise).toBeLessThanOrEqual(r.current.totals.costPaise + 1e-6);
+      expect(r.recommended!.feasible).toBe(true);
+    }
+  });
+  it("is never worse than the coarse grid optimum", () => {
+    const fine = optimise(deckInput());
+    const coarse = optimise({ ...deckInput(), gridMinutes: 5 });
+    const grid15 = optimise({ ...deckInput(), gridMinutes: 15 });
+    expect(fine.recommended!.totals.costPaise).toBeLessThanOrEqual(coarse.recommended!.totals.costPaise + 1e-6);
+    expect(grid15.recommended!.totals.costPaise).toBeGreaterThan(0);
+    expect(grid15.recommended!.feasible).toBe(true);
+  });
+});
