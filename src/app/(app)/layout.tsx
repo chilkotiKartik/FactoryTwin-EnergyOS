@@ -11,12 +11,15 @@ import { can } from "@/server/permissions";
 import { OfflineProvider } from "@/components/offline/offline-provider";
 import { OfflineBanner } from "@/components/offline/offline-banner";
 import { RegisterServiceWorker } from "@/components/offline/register-sw";
+import { CommandPalette } from "@/components/shell/command-palette";
+import { getTheme } from "@/server/theme";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const actor = await requireActor();
   if (actor.mustChangePassword) redirect("/account?first=1");
   const db = getDb();
-  const [mode, { day, days }, pending, high] = await Promise.all([
+  const [theme, mode, { day, days }, pending, high] = await Promise.all([
+    getTheme(),
     dataMode(db, actor),
     selectedDay(actor),
     db
@@ -40,7 +43,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <OfflineProvider userId={actor.userId} factoryId={actor.factory.id} timeZone={actor.factory.timeZone}>
     <RegisterServiceWorker />
-    <div className="min-h-dvh lg:pl-60">
+    <CommandPalette canSeeAudit={can(actor.role, "audit.view")} isSimulation={actor.factory.isSimulation} />
+    <div className="min-h-dvh lg:pl-64">
       <Sidebar
         factoryName={actor.factory.name}
         isSimulation={actor.factory.isSimulation}
@@ -49,8 +53,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       />
       <div className="flex min-h-dvh flex-col">
         {actor.factory.isSimulation ? (
-          <div role="note" className="no-print sticky top-0 z-30 flex items-center justify-center gap-2 bg-violet px-3 py-1 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-white">
-            Simulation — synthetic data — not field validation
+          <div role="note" className="no-print sticky top-0 z-30 flex items-center justify-center gap-2 bg-[linear-gradient(90deg,#6d28d9,#4f46e5)] px-3 py-1 text-center text-[10.5px] font-semibold uppercase tracking-[0.14em] text-white">
+            <span className="sm:hidden">Simulation · synthetic data</span>
+            <span className="hidden sm:inline">Simulation — synthetic data — not field validation</span>
           </div>
         ) : null}
         <Topbar
@@ -63,8 +68,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           timeZone={actor.factory.timeZone}
           notifications={notifications}
           sticky={!actor.factory.isSimulation}
+          theme={theme}
         />
-        <main id="main" className="print-full mx-auto w-full max-w-[1440px] flex-1 px-4 py-5 sm:px-6 lg:px-8">
+        <main id="main" className="print-full mx-auto w-full max-w-[1480px] flex-1 px-4 pb-28 pt-5 sm:px-6 lg:px-8 lg:pb-10">
           <OfflineBanner />
           {children}
         </main>

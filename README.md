@@ -15,6 +15,12 @@ On the deck's day it finds that Heat 07 used about 13% more energy than expected
 
 EnergyOS is **advisory only**. It never sends a command to a furnace or any other equipment.
 
+## What's inside
+
+- **Why EnergyOS** (`/why`): the sourced evidence for the problem (sector size, energy share of cost, melting norms, holding losses, 2023 ToD tariff rules) and a savings calculator that starts from the factory's own last 30 days. Full references in [docs/RESEARCH.md](docs/RESEARCH.md).
+- **Control-room interface**: light and dark themes (follows the device unless chosen in the account menu), a phone bottom bar with the four most-used screens, a ⌘K / Ctrl+K command palette, and a benchmark strip on the dashboard comparing the day with the CII melting norm.
+- **Every screen is smoke-tested** as every role, on a desktop and a phone, in both themes (`tests/e2e/smoke.spec.ts`).
+
 ## Quick start
 
 Requirements: Node.js 20.9+ (tested on 22), pnpm 10.
@@ -47,7 +53,7 @@ Sign in with any demo account (password `energyos-demo`, set by `DEMO_PASSWORD`)
 | `pnpm lint` | ESLint |
 | `pnpm typecheck` | TypeScript, no emit |
 | `pnpm test` | Unit and integration tests (Vitest); each integration file uses its own temporary database |
-| `pnpm test:e2e` | Playwright demo flow against a production build on port 3100 with `data/e2e.db`. Run `pnpm build` first. If Playwright's own Chromium is not installed, set `PLAYWRIGHT_CHROMIUM_PATH` to a Chromium binary. |
+| `pnpm test:e2e` | Playwright: the demo flow plus a smoke test of every screen × role × phone/desktop, against a production build on port 3100 with `data/e2e.db`. Run `pnpm build` first. If Playwright's own Chromium is not installed, set `PLAYWRIGHT_CHROMIUM_PATH` to a Chromium binary. |
 | `pnpm db:setup` | Apply migrations and seed if empty |
 | `pnpm db:reset` | Recreate the database |
 | `pnpm db:generate` | Generate a migration after editing `src/db/schema.ts` |

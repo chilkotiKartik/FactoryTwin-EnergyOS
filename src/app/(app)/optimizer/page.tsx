@@ -89,7 +89,7 @@ export default async function OptimizerPage(props: PageProps<"/optimizer">) {
           plans.length > 1 ? (
             <div className="flex flex-wrap gap-1">
               {plans.slice(0, 6).map((p) => (
-                <Link key={p.id} href={`/optimizer?plan=${p.id}`} className={`rounded-md border px-2.5 py-1 text-[12px] ${p.id === plan.id ? "border-ink bg-ink text-white" : "border-line bg-surface text-ink-2 hover:bg-surface-3"}`}>
+                <Link key={p.id} href={`/optimizer?plan=${p.id}`} className={`rounded-md border px-2.5 py-1 text-[12px] ${p.id === plan.id ? "border-ink bg-ink text-on-ink" : "border-line bg-surface text-ink-2 hover:bg-surface-3"}`}>
                   {p.planDate}
                 </Link>
               ))}

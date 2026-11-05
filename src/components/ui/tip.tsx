@@ -8,7 +8,7 @@ export function Tip({ content, children, side = "top" }: { content: React.ReactN
       <T.Root>
         <T.Trigger asChild>{children}</T.Trigger>
         <T.Portal>
-          <T.Content side={side} sideOffset={6} className="z-50 max-w-xs rounded-md bg-ink px-3 py-2 text-[12px] leading-snug text-white shadow-lg">
+          <T.Content side={side} sideOffset={6} className="z-50 max-w-xs rounded-md bg-ink px-3 py-2 text-[12px] leading-snug text-on-ink shadow-lg">
             {content}
             <T.Arrow className="fill-ink" />
           </T.Content>

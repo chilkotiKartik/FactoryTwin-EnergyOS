@@ -54,7 +54,7 @@ export function DecisionPanel({ recommendationId, version, summary }: { recommen
             className={`flex items-center gap-3 rounded-lg px-4 py-3 ${done === "APPROVED" ? "bg-teal-soft text-teal" : "bg-surface-3 text-ink-2"}`}
             role="status"
           >
-            <motion.span initial={reduce ? false : { rotate: -90 }} animate={{ rotate: 0 }} className={`grid size-8 place-items-center rounded-full ${done === "APPROVED" ? "bg-teal text-white" : "bg-ink-3 text-white"}`}>
+            <motion.span initial={reduce ? false : { rotate: -90 }} animate={{ rotate: 0 }} className={`grid size-8 place-items-center rounded-full ${done === "APPROVED" ? "bg-teal text-white" : "bg-ink-3 text-on-ink"}`}>
               {done === "APPROVED" ? <Check className="size-4" /> : <X className="size-4" />}
             </motion.span>
             <span className="font-semibold">{done === "APPROVED" ? "Decision recorded: approved" : "Decision recorded: rejected"}</span>

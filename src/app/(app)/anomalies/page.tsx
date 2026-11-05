@@ -74,7 +74,7 @@ export default async function AnomaliesPage(props: PageProps<"/anomalies">) {
       </Panel>
       <div className="mb-3 flex flex-wrap gap-1 text-[12px]">
         {[null, ...STATUSES].map((s) => (
-          <Link key={s ?? "all"} href={s ? `/anomalies?status=${s}` : "/anomalies"} className={`rounded-md border px-2.5 py-1 ${status === s ? "border-ink bg-ink text-white" : "border-line bg-surface hover:bg-surface-3"}`}>
+          <Link key={s ?? "all"} href={s ? `/anomalies?status=${s}` : "/anomalies"} className={`rounded-md border px-2.5 py-1 ${status === s ? "border-ink bg-ink text-on-ink" : "border-line bg-surface hover:bg-surface-3"}`}>
             {s ? s.charAt(0) + s.slice(1).toLowerCase() : "All"}
           </Link>
         ))}

@@ -76,13 +76,13 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
           </>
         }
         actions={
-          <nav aria-label="Period" className="flex rounded-md border border-line-strong bg-surface p-0.5">
+          <nav aria-label="Period" className="card flex rounded-xl border border-line bg-surface p-1">
             {(Object.keys(RANGES) as RangeKey[]).map((k) => (
               <Link
                 key={k}
                 href={`/dashboard?range=${k}`}
                 aria-current={range === k ? "true" : undefined}
-                className={cn("rounded px-3 py-1.5 text-[13px] font-medium", range === k ? "bg-ink text-white" : "text-ink-2 hover:bg-surface-3")}
+                className={cn("rounded-lg px-3.5 py-1.5 text-[13px] font-medium transition-colors", range === k ? "bg-ink text-on-ink" : "text-ink-2 hover:bg-surface-3")}
               >
                 {RANGES[k].label}
               </Link>
@@ -98,11 +98,13 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
         </PanelBody>
       </Panel>
 
+      <BenchmarkStrip sec={sum.sec} holdingPct={holdingPct} solarShare={solarShare(sum.costByKind)} />
+
       <Panel className="mb-5">
         <div className="grid grid-cols-2 divide-line sm:grid-cols-3 lg:grid-cols-5 [&>*]:border-b [&>*]:border-line lg:[&>*:nth-child(n+6)]:border-b-0">
           <Stat label="Energy consumed" value={fmt(sum.energyKwh, 0)} unit="kWh" evidence={sum.evidence} definition={`Σ interval kWh from the furnace meter, ${period}. ${src}`} />
           <Stat label="Tonnes poured" value={fmt(sum.tonnesPoured, 2)} unit="t" definition={`Σ poured kg of tapped heats ÷ 1000, ${period}. Source: heat log.`} delta={{ text: `${sum.heatsTapped} heats`, tone: "neutral" }} />
-          <Stat label="Specific energy (SEC)" value={fmt(sum.sec, 1)} unit="kWh/t" emphasis={sum.sec && sum.sec > 650 ? "amber" : null} definition="SEC = total meter kWh ÷ tonnes poured. Kolhapur cluster profile reports 600–700 kWh/t (VERIFIED context, TERI)." />
+          <Stat label="Specific energy (SEC)" value={fmt(sum.sec, 1)} unit="kWh/t" emphasis={sum.sec && sum.sec > 650 ? "amber" : null} definition="SEC = total meter kWh ÷ tonnes poured. Context: CII norm 620 kWh per tonne of liquid metal; measured Indian induction foundries 660–700 kWh/t (sources on the Why page)." />
           <Stat label="Energy cost" value={inr(sum.costPaise)} definition={`Σ interval kWh × tariff rate in force at that minute (tariff versions on the Tariffs page). Rates are ASSUMPTIONS unless marked VERIFIED. ${sum.unpricedKwh > 0 ? `${fmt(sum.unpricedKwh, 1)} kWh unpriced.` : ""}`} delta={{ text: "tariff: assumption", tone: "neutral" }} />
           <Stat label="Cost per tonne" value={inr(sum.costPerTonnePaise)} unit="/t" definition="Energy cost ÷ tonnes poured." />
           <Stat
@@ -214,6 +216,38 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
   );
 }
 
+/** CII norm for induction melting, kWh per tonne of liquid metal (see /why for the source). */
+const SEC_NORM = 620;
+
+function solarShare(byKind: Record<string, { kwh: number }>): number | null {
+  const total = Object.values(byKind).reduce((s, v) => s + v.kwh, 0);
+  return total > 0 ? (100 * (byKind.SOLAR?.kwh ?? 0)) / total : null;
+}
+
+/** Three numbers a plant head can act on, each against a sourced reference. */
+function BenchmarkStrip({ sec, holdingPct, solarShare }: { sec: number | null; holdingPct: number | null; solarShare: number | null }) {
+  const gap = sec !== null ? (100 * (sec - SEC_NORM)) / SEC_NORM : null;
+  const items = [
+    { k: "vs CII melting norm", v: gap === null ? "—" : `${gap >= 0 ? "+" : "−"}${fmt(Math.abs(gap), 1)}%`, sub: `${fmt(sec, 0)} vs ${SEC_NORM} kWh/t`, tone: gap !== null && gap > 10 ? "amber" : "teal" },
+    { k: "Energy spent holding", v: holdingPct === null ? "—" : `${fmt(holdingPct, 1)}%`, sub: "of metered kWh; avoidable by timing", tone: holdingPct && holdingPct > 1 ? "amber" : "teal" },
+    { k: "kWh in solar hours", v: solarShare === null ? "—" : `${fmt(solarShare, 0)}%`, sub: "cheapest window under ToD tariffs", tone: solarShare !== null && solarShare < 50 ? "amber" : "teal" },
+  ] as const;
+  return (
+    <div className="mb-5 grid gap-3 sm:grid-cols-3">
+      {items.map((i) => (
+        <Link key={i.k} href="/why" className="card group relative overflow-hidden rounded-2xl border border-line bg-surface px-4 py-3.5 transition-transform hover:-translate-y-0.5 sm:px-5">
+          <span aria-hidden className={cn("absolute inset-y-0 left-0 w-1", i.tone === "amber" ? "bg-amber-mark" : "bg-teal-mark")} />
+          <p className="text-[12px] font-medium text-ink-3">{i.k}</p>
+          <p className={cn("num mt-1 text-[26px] font-semibold leading-none tracking-tight", i.tone === "amber" ? "text-amber" : "text-teal")}>{i.v}</p>
+          <p className="mt-1.5 text-[12px] text-ink-3">
+            {i.sub} <ArrowRight className="ml-0.5 inline size-3 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
+          </p>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
 interface Totals {
   kwh: number;
   costPaise: number;
@@ -268,7 +302,7 @@ function TariffSplit({ byKind }: { byKind: Record<string, { kwh: number; paise: 
   const order = ["SOLAR", "NORMAL", "PEAK", "OFFPEAK"];
   const total = Object.values(byKind).reduce((s, v) => s + v.kwh, 0);
   const names: Record<string, string> = { SOLAR: "Solar window", NORMAL: "Normal", PEAK: "Peak", OFFPEAK: "Off-peak" };
-  const color: Record<string, string> = { SOLAR: "bg-[#e7b416]", NORMAL: "bg-ink-2", PEAK: "bg-red-mark", OFFPEAK: "bg-blue" };
+  const color: Record<string, string> = { SOLAR: "bg-amber-mark", NORMAL: "bg-ink-3", PEAK: "bg-red-mark", OFFPEAK: "bg-blue" };
   const entries = order.filter((k) => byKind[k]);
   if (!entries.length) return <p className="text-[13px] text-ink-3">No priced energy in this period.</p>;
   return (

@@ -71,7 +71,7 @@ export default async function DemoPage() {
             <ol className="flex flex-col gap-3">
               {STEPS.map((s, i) => (
                 <li key={s.href} className="flex gap-3">
-                  <span className="num grid size-6 shrink-0 place-items-center rounded-full bg-ink text-[12px] font-semibold text-white">{i + 1}</span>
+                  <span className="num grid size-6 shrink-0 place-items-center rounded-full bg-ink text-[12px] font-semibold text-on-ink">{i + 1}</span>
                   <div className="text-[13px]">
                     <Link href={s.href} className="font-semibold text-blue hover:underline">
                       {s.t}

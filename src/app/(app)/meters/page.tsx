@@ -216,7 +216,7 @@ export default async function MetersPage(props: PageProps<"/meters">) {
             actions={
               <div className="flex gap-1 text-[12px]">
                 {["", "OK", "SUSPECT", "INVALID"].map((q) => (
-                  <Link key={q} href={qs({ quality: q || undefined, page: 1 })} className={`rounded-md border px-2 py-1 ${(quality ?? "") === q ? "border-ink bg-ink text-white" : "border-line hover:bg-surface-3"}`}>
+                  <Link key={q} href={qs({ quality: q || undefined, page: 1 })} className={`rounded-md border px-2 py-1 ${(quality ?? "") === q ? "border-ink bg-ink text-on-ink" : "border-line hover:bg-surface-3"}`}>
                     {q || "All"}
                   </Link>
                 ))}

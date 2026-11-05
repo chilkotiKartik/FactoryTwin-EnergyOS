@@ -18,7 +18,8 @@ export interface StatProps {
 /** A KPI with a defined unit, time range, source and calculation. */
 export function Stat({ label, value, unit, definition, evidence, delta, emphasis, className }: StatProps) {
   return (
-    <div className={cn("relative flex min-w-0 flex-col gap-1 px-4 py-3", className)}>
+    <div className={cn("relative flex min-w-0 flex-col gap-1.5 px-4 py-4 sm:px-5", className)}>
+      {emphasis ? <span aria-hidden className={cn("absolute inset-x-4 top-0 h-0.5 rounded-full sm:inset-x-5", emphasis === "amber" ? "bg-amber-mark" : emphasis === "teal" ? "bg-teal-mark" : "bg-red-mark")} /> : null}
       <div className="flex items-center gap-1.5 text-[12px] font-medium text-ink-3">
         {emphasis ? <span aria-hidden className={cn("size-1.5 rounded-full", emphasis === "amber" ? "bg-amber-mark" : emphasis === "teal" ? "bg-teal-mark" : "bg-red-mark")} /> : null}
         <span className="truncate">{label}</span>
@@ -29,7 +30,7 @@ export function Stat({ label, value, unit, definition, evidence, delta, emphasis
         </Tip>
       </div>
       <div className="flex items-baseline gap-1.5">
-        <span className="num text-[26px] font-semibold leading-none tracking-tight text-ink">{value}</span>
+        <span className="num text-[24px] font-semibold leading-none tracking-tight text-ink sm:text-[28px]">{value}</span>
         {unit ? <span className="text-[13px] text-ink-3">{unit}</span> : null}
       </div>
       <div className="flex min-h-5 flex-wrap items-center gap-1.5">

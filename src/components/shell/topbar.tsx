@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import * as Menu from "@radix-ui/react-dropdown-menu";
-import { Bell, CalendarDays, ChevronDown, ClipboardCheck, LogOut, UserCog, Radio, TriangleAlert, WifiOff, FlaskConical, Building2 } from "lucide-react";
+import { Bell, CalendarDays, Check, ChevronDown, ClipboardCheck, Languages, LogOut, Monitor, Moon, Search, Sun, UserCog, Radio, TriangleAlert, WifiOff, FlaskConical, Building2 } from "lucide-react";
+import { THEME_COOKIE, type Theme } from "@/lib/theme";
+import { OPEN_SEARCH_EVENT } from "./command-palette";
 import { toast } from "sonner";
 import { logoutAction, setDayAction, setLocaleAction, switchFactoryAction } from "@/app/actions";
 import { useT } from "@/lib/i18n/context";
@@ -27,6 +29,15 @@ export interface TopbarProps {
   timeZone: string;
   notifications: { id: string; kind: "approval" | "anomaly"; title: string; body: string; href: string }[];
   sticky: boolean;
+  theme: Theme;
+}
+
+/** Remember the theme in a cookie (read by the server on the next render) and apply it now. */
+function persistTheme(next: Theme) {
+  document.cookie = `${THEME_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;
+  const root = document.documentElement;
+  if (next === "system") root.removeAttribute("data-theme");
+  else root.setAttribute("data-theme", next);
 }
 
 function ModeBadge({ mode, timeZone }: { mode: TopbarProps["mode"]; timeZone: string }) {
@@ -42,22 +53,28 @@ function ModeBadge({ mode, timeZone }: { mode: TopbarProps["mode"]; timeZone: st
         </span>
       }
     >
-      <span tabIndex={0} className={cn("inline-flex h-7 items-center gap-1.5 rounded border px-2 text-[11px] font-semibold uppercase tracking-wider", cls)} data-testid="data-mode">
+      <span tabIndex={0} className={cn("inline-flex h-7 items-center gap-1.5 rounded-lg border px-2 text-[11px] font-semibold uppercase tracking-wider", cls)} data-testid="data-mode">
         <Icon className="size-3.5" aria-hidden />
-        {mode.mode}
+        <span className="hidden sm:inline">{mode.mode}</span>
+        <span className="sr-only sm:hidden">{mode.mode}</span>
       </span>
     </Tip>
   );
 }
 
-export function Topbar({ actor, factories, activeFactoryId, mode, day, days, timeZone, notifications, sticky }: TopbarProps) {
+export function Topbar({ actor, factories, activeFactoryId, mode, day, days, timeZone, notifications, sticky, theme: initialTheme }: TopbarProps) {
+  const [theme, setTheme] = useState<Theme>(initialTheme);
+  const applyTheme = (next: Theme) => {
+    setTheme(next);
+    persistTheme(next);
+  };
   const router = useRouter();
   const [pending, start] = useTransition();
   const active = factories.find((f) => f.factoryId === activeFactoryId);
   const { t, locale } = useT();
 
   return (
-    <header className={cn("no-print z-20 border-b border-line bg-surface/95 backdrop-blur", sticky ? "sticky top-0" : "sticky top-[23px]")}>
+    <header className={cn("no-print z-20 border-b border-line bg-surface/75 backdrop-blur-xl", sticky ? "sticky top-0" : "sticky top-[23px]")}>
       <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-2 px-4 sm:gap-3 sm:px-6 lg:px-8">
         <label className="sr-only" htmlFor="factory-select">
           Factory
@@ -75,7 +92,7 @@ export function Topbar({ actor, factories, activeFactoryId, mode, day, days, tim
                 else router.refresh();
               })
             }
-            className="h-9 max-w-[52vw] truncate rounded-md border border-line-strong bg-surface pl-8 pr-7 text-[13px] font-medium disabled:opacity-100 sm:max-w-xs"
+            className="h-9 max-w-[42vw] truncate rounded-lg border border-line-strong bg-surface pl-8 pr-7 text-[13px] font-medium disabled:opacity-100 sm:max-w-xs"
           >
             {factories.map((f) => (
               <option key={f.factoryId} value={f.factoryId}>
@@ -101,7 +118,7 @@ export function Topbar({ actor, factories, activeFactoryId, mode, day, days, tim
                 else router.refresh();
               })
             }
-            className="num h-9 rounded-md border border-line-strong bg-surface pl-8 pr-7 text-[13px]"
+            className="num h-9 rounded-lg border border-line-strong bg-surface pl-8 pr-7 text-[13px]"
           >
             {days.length === 0 ? <option value="">No production days</option> : null}
             {days.map((d) => (
@@ -114,31 +131,18 @@ export function Topbar({ actor, factories, activeFactoryId, mode, day, days, tim
         <span className="hidden text-[12px] text-ink-3 xl:inline">Shift 06:00–22:00 · {timeZone}</span>
 
         <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event(OPEN_SEARCH_EVENT))}
+            className="flex h-9 items-center gap-2 rounded-lg border border-line bg-surface-2 px-2.5 text-[13px] text-ink-3 hover:text-ink"
+            aria-label={t("search.open")}
+          >
+            <Search className="size-4" aria-hidden />
+            <span className="hidden xl:inline">{t("search.open")}</span>
+            <kbd className="hidden rounded border border-line px-1 text-[10.5px] xl:inline">⌘K</kbd>
+          </button>
           <ModeBadge mode={mode} timeZone={timeZone} />
 
-          <label className="sr-only" htmlFor="lang-select">
-            {t("lang.label")}
-          </label>
-          <select
-            id="lang-select"
-            value={locale}
-            disabled={pending}
-            onChange={(e) =>
-              start(async () => {
-                if (!isLocale(e.target.value)) return;
-                const r = await setLocaleAction(e.target.value);
-                if (!r.ok) toast.error(r.message);
-                else router.refresh();
-              })
-            }
-            className="h-9 rounded-md border border-line-strong bg-surface px-2 text-[13px]"
-          >
-            {LOCALES.map((l) => (
-              <option key={l} value={l}>
-                {LOCALE_NAMES[l]}
-              </option>
-            ))}
-          </select>
 
           <Popover.Root>
             <Popover.Trigger asChild>
@@ -150,7 +154,7 @@ export function Topbar({ actor, factories, activeFactoryId, mode, day, days, tim
               </button>
             </Popover.Trigger>
             <Popover.Portal>
-              <Popover.Content align="end" sideOffset={8} className="z-50 w-[min(92vw,380px)] rounded-lg border border-line bg-surface shadow-xl">
+              <Popover.Content align="end" sideOffset={8} className="pop z-50 w-[min(92vw,380px)] overflow-hidden rounded-2xl border border-line bg-surface">
                 <p className="border-b border-line px-4 py-2.5 text-[12px] font-semibold uppercase tracking-wide text-ink-3">Needs attention</p>
                 {notifications.length === 0 ? (
                   <p className="px-4 py-6 text-center text-[13px] text-ink-3">Nothing pending. No open high-variance heats.</p>
@@ -178,7 +182,7 @@ export function Topbar({ actor, factories, activeFactoryId, mode, day, days, tim
           <Menu.Root>
             <Menu.Trigger asChild>
               <button type="button" className="flex h-9 items-center gap-2 rounded-md px-1.5 text-left hover:bg-surface-3 sm:px-2" aria-label="Account menu">
-                <span className="grid size-7 place-items-center rounded-full bg-shell text-[11px] font-semibold text-white">
+                <span className="brand-gradient grid size-8 place-items-center rounded-full text-[11px] font-semibold text-white">
                   {actor.name
                     .split(" ")
                     .map((p) => p[0])
@@ -195,7 +199,7 @@ export function Topbar({ actor, factories, activeFactoryId, mode, day, days, tim
               </button>
             </Menu.Trigger>
             <Menu.Portal>
-              <Menu.Content align="end" sideOffset={8} className="z-50 min-w-56 rounded-lg border border-line bg-surface p-1 shadow-xl">
+              <Menu.Content align="end" sideOffset={8} className="pop z-50 min-w-60 rounded-2xl border border-line bg-surface p-1.5">
                 <div className="px-3 py-2">
                   <p className="text-[13px] font-medium">{actor.name}</p>
                   <p className="text-[12px] text-ink-3">{actor.email}</p>
@@ -203,6 +207,51 @@ export function Topbar({ actor, factories, activeFactoryId, mode, day, days, tim
                     {ROLE_LABEL[actor.role]} · {active?.factoryName}
                   </p>
                 </div>
+                <Menu.Separator className="my-1 h-px bg-line" />
+                <Menu.Label className="flex items-center gap-2 px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-ink-3">{t("theme.label")}</Menu.Label>
+                <div className="grid grid-cols-3 gap-1 px-2 pb-2">
+                  {([
+                    ["light", Sun, "theme.light"],
+                    ["dark", Moon, "theme.dark"],
+                    ["system", Monitor, "theme.system"],
+                  ] as const).map(([v, Ic, label]) => (
+                    <Menu.Item
+                      key={v}
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        applyTheme(v);
+                      }}
+                      className={cn("flex cursor-pointer flex-col items-center gap-1 rounded-lg border px-2 py-2 text-[11.5px] outline-none data-[highlighted]:bg-surface-3", theme === v ? "border-[var(--brand-2)] text-ink" : "border-line text-ink-2")}
+                      aria-checked={theme === v}
+                      role="menuitemradio"
+                    >
+                      <Ic className="size-4" aria-hidden />
+                      {t(label)}
+                    </Menu.Item>
+                  ))}
+                </div>
+                <Menu.Label className="flex items-center gap-2 px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-ink-3">
+                  <Languages className="size-3.5" aria-hidden /> {t("lang.label")}
+                </Menu.Label>
+                {LOCALES.map((l) => (
+                  <Menu.Item
+                    key={l}
+                    role="menuitemradio"
+                    aria-checked={locale === l}
+                    onSelect={() =>
+                      start(async () => {
+                        if (!isLocale(l) || l === locale) return;
+                        const r = await setLocaleAction(l);
+                        if (!r.ok) toast.error(r.message);
+                        else router.refresh();
+                      })
+                    }
+                    className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[13px] text-ink outline-none data-[highlighted]:bg-surface-3"
+                  >
+                    <span className="flex-1">{LOCALE_NAMES[l]}</span>
+                    {locale === l ? <Check className="size-4 text-[var(--brand-2)]" aria-hidden /> : null}
+                  </Menu.Item>
+                ))}
                 <Menu.Separator className="my-1 h-px bg-line" />
                 <Menu.Item asChild>
                   <Link href="/account" className="flex w-full items-center gap-2 rounded px-3 py-2 text-[13px] text-ink outline-none data-[highlighted]:bg-surface-3">

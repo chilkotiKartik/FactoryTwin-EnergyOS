@@ -34,7 +34,7 @@ export function DecisionLoop({ stages }: { stages: Stage[] }) {
   return (
     <div className="relative">
       <div className="absolute left-[7%] right-[7%] top-[22px] hidden h-0.5 bg-line xl:block" aria-hidden>
-        <motion.div className="h-full origin-left bg-ink" initial={reduce ? false : { scaleX: 0 }} animate={{ scaleX: progress }} transition={{ duration: 0.9, ease: "easeOut" }} />
+        <motion.div className="brand-gradient h-full origin-left" initial={reduce ? false : { scaleX: 0 }} animate={{ scaleX: progress }} transition={{ duration: 0.9, ease: "easeOut" }} />
       </div>
       <ol className="relative grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
         {stages.map((s, i) => {
@@ -49,11 +49,11 @@ export function DecisionLoop({ stages }: { stages: Stage[] }) {
             >
               <Link
                 href={s.href}
-                className={cn("group flex h-full flex-col gap-1.5 rounded-lg border bg-surface p-3 transition-shadow hover:shadow-md focus-visible:shadow-md", st.ring)}
+                className={cn("group flex h-full flex-col gap-1.5 rounded-xl border bg-surface p-3 transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-card)]", st.ring)}
                 aria-label={`Step ${i + 1}, ${s.title}: ${s.metric}. ${st.label}.`}
               >
                 <div className="flex items-center gap-2">
-                  <span className={cn("grid size-6 place-items-center rounded-full border bg-surface text-[11px] font-semibold num", s.state === "waiting" ? "border-line text-ink-3" : "border-ink text-ink")}>{i + 1}</span>
+                  <span className={cn("grid size-6 place-items-center rounded-full border bg-surface text-[11px] font-semibold num", s.state === "waiting" ? "border-line text-ink-3" : "border-transparent brand-gradient text-white")}>{i + 1}</span>
                   <Icon className={cn("size-4", st.cls)} aria-hidden />
                   <span className="sr-only">{st.label}</span>
                 </div>

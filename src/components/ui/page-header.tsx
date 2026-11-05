@@ -3,7 +3,7 @@ import { ChevronRight } from "lucide-react";
 
 export function PageHeader({ title, description, crumbs, actions }: { title: string; description?: React.ReactNode; crumbs?: { label: string; href?: string }[]; actions?: React.ReactNode }) {
   return (
-    <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-4 animate-[slideUp_240ms_ease-out]">
       <div className="min-w-0">
         {crumbs?.length ? (
           <nav aria-label="Breadcrumb" className="mb-1 flex flex-wrap items-center gap-1 text-[12px] text-ink-3">
@@ -21,8 +21,8 @@ export function PageHeader({ title, description, crumbs, actions }: { title: str
             ))}
           </nav>
         ) : null}
-        <h1 className="text-[22px] font-semibold tracking-tight text-ink">{title}</h1>
-        {description ? <p className="mt-1 max-w-3xl text-[14px] text-ink-2">{description}</p> : null}
+        <h1 className="text-[22px] font-semibold tracking-tight text-ink sm:text-[26px]">{title}</h1>
+        {description ? <div className="mt-1.5 max-w-3xl text-[14px] leading-relaxed text-ink-2">{description}</div> : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
     </div>

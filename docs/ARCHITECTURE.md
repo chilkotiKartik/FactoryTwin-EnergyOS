@@ -90,3 +90,9 @@ Every run stores a snapshot and SHA-256 fingerprint of its inputs (plan revision
 - **SIMULATION** — always for a simulation factory, with a persistent banner.
 - **LIVE** — only when MEASURED readings (ingest API, real factory) arrived within the last five meter intervals.
 - **OFFLINE** — otherwise. The app never shows LIVE for imported, manual or synthetic data.
+
+## Interface
+
+- **Design tokens** live in `src/app/globals.css`: every colour, shadow and band is a CSS variable with a light and a dark value, and Tailwind classes read them (`bg-surface`, `text-ink-2`, `bg-amber-soft` …). Components never hard-code colours, so both themes and print stay consistent. The theme is `<html data-theme>` from the `energyos_theme` cookie; without it the device setting applies.
+- **Navigation** is defined once in `src/components/shell/nav.ts` and rendered three ways: the desktop sidebar, the phone bottom bar (Dashboard, Heat log, Optimiser, Approvals, More), and the ⌘K command palette, which matches English keywords so search works in any UI language.
+- **Phone first where it matters**: 44 px+ touch targets on heat entry, a single-line simulation banner, bottom-bar safe-area padding, tables that scroll inside their panel rather than the page.

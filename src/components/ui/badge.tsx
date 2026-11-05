@@ -9,12 +9,12 @@ const tones: Record<Tone, string> = {
   red: "bg-red-soft text-red border-red/25",
   blue: "bg-blue-soft text-blue border-blue/25",
   violet: "bg-violet/10 text-violet border-violet/25",
-  dark: "bg-ink text-white border-ink",
+  dark: "bg-ink text-on-ink border-ink",
 };
 
 export function Badge({ tone = "neutral", className, children, title }: { tone?: Tone; className?: string; children: React.ReactNode; title?: string }) {
   return (
-    <span title={title} className={cn("inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide leading-none", tones[tone], className)}>
+    <span title={title} className={cn("inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide leading-none", tones[tone], className)}>
       {children}
     </span>
   );
