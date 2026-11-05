@@ -110,3 +110,58 @@ describe("1-minute refinement", () => {
     expect(grid15.recommended!.feasible).toBe(true);
   });
 });
+
+describe("heat reordering (opt-in)", () => {
+  // The first heat's mould is ready very late; the other two are ready early.
+  const lateFirst = () => deckInput({ process: { ...deckInput().process, maxHoldMinutes: 0 } }, [1000, 520, 540]);
+
+  it("keeps the given sequence unless reordering is allowed", () => {
+    const r = optimise(lateFirst());
+    expect(r.status).toBe("OPTIMAL");
+    expect(r.reordered).toBe(false);
+    expect(r.sequence).toEqual(["h0", "h1", "h2"]);
+  });
+
+  it("moves the late-mould heat last when allowed, and that is cheaper and feasible", () => {
+    const fixed = optimise(lateFirst());
+    const re = optimise({ ...lateFirst(), allowReorder: true });
+    expect(re.status).toBe("OPTIMAL");
+    expect(re.reordered).toBe(true);
+    expect(re.sequence).toEqual(["h1", "h2", "h0"]);
+    expect(re.recommended!.feasible).toBe(true);
+    expect(re.recommended!.totals.costPaise).toBeLessThan(fixed.recommended!.totals.costPaise - 100);
+    expect(re.recommended!.checks.find((c) => c.id === "sequence")!.status).toBe("PASS");
+    expect(re.recommended!.totals.tonnesPoured).toBe(fixed.recommended!.totals.tonnesPoured);
+    for (const it of re.recommended!.items) expect(it.tapMin).toBeGreaterThanOrEqual(it.mouldReadyMin!);
+    // Current practice is still evaluated in the given sequence.
+    expect(re.current.items.map((i) => i.label)).toEqual(["H01", "H02", "H03"]);
+  });
+
+  it("never moves a heat into another order's slot", () => {
+    const input = deckInput({ allowReorder: true });
+    input.heats = input.heats.map((h, k) => ({ ...h, orderId: k < 4 ? "o1" : "o2" }));
+    input.orders = [
+      { id: "o1", code: "A", requiredTonnes: 2, dueMin: 1320 },
+      { id: "o2", code: "B", requiredTonnes: 4, dueMin: 1320 },
+    ];
+    const r = optimise(input);
+    expect(r.status).toBe("OPTIMAL");
+    r.recommended!.items.forEach((it, pos) => expect(it.orderId).toBe(input.heats[pos].orderId));
+    expect(new Set(r.sequence).size).toBe(input.heats.length);
+  });
+
+  it("is never worse than the fixed sequence and stays within its time budget", () => {
+    const t0 = performance.now();
+    const fixed = optimise(deckInput());
+    const re = optimise(deckInput({ allowReorder: true }));
+    expect(performance.now() - t0).toBeLessThan(6000);
+    expect(re.recommended!.totals.costPaise).toBeLessThanOrEqual(fixed.recommended!.totals.costPaise + 1e-6);
+    expect(re.recommended!.feasible).toBe(true);
+  });
+
+  it("stays infeasible when no ordering can meet the deadline", () => {
+    const r = optimise(deckInput({ allowReorder: true, deadlineMin: 15 * 60 + 30 }));
+    expect(r.status).toBe("INFEASIBLE");
+    expect(r.reordered).toBe(false);
+  });
+});

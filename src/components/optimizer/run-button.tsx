@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 export function RunOptimizerButton({ planId, disabled }: { planId: string; disabled?: boolean }) {
   const router = useRouter();
   const [pending, start] = useTransition();
+  const [reorder, setReorder] = useState(false);
   const [last, setLast] = useState<{ message: string; recId: string | null; status: string } | null>(null);
   return (
     <div className="flex flex-col items-end gap-2">
@@ -22,7 +23,7 @@ export function RunOptimizerButton({ planId, disabled }: { planId: string; disab
         disabled={disabled || pending}
         onClick={() =>
           start(async () => {
-            const r = await runOptimizationAction(planId);
+            const r = await runOptimizationAction(planId, { allowReorder: reorder });
             if (!r.ok || !r.data) return void toast.error(r.message ?? "The optimiser could not run.");
             setLast({ message: r.data.message, recId: r.data.recommendationId, status: r.data.status });
             if (r.data.status === "OPTIMAL") toast.success(r.data.message);
@@ -34,6 +35,10 @@ export function RunOptimizerButton({ planId, disabled }: { planId: string; disab
         {pending ? <Loader2 className="animate-spin" /> : <Cpu />}
         {pending ? "Solving…" : "Run optimiser"}
       </Button>
+      <label className="flex items-center gap-2 text-[12px] text-ink-2">
+        <input type="checkbox" checked={reorder} onChange={(e) => setReorder(e.target.checked)} disabled={disabled || pending} className="size-4" />
+        Allow reordering heats within an order
+      </label>
       <AnimatePresence>
         {pending ? (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-1 w-48 overflow-hidden rounded bg-surface-3" role="progressbar" aria-label="Optimiser running">

@@ -36,6 +36,8 @@ export interface WhatIfParams {
   availableFromMin?: number;
   availableToMin?: number;
   currentPracticeStartMin?: number;
+  /** Let the solver reorder heats within an order. */
+  allowReorder?: boolean;
 }
 
 /** Assemble optimiser input from persisted records and fingerprint it for staleness checks. */
@@ -94,18 +96,20 @@ export async function buildInput(db: DB, actor: Actor, planId: string, ov: WhatI
     pricePaise: Array.from(minuteRateTable(tariff)),
     deadlineMin: ov.deadlineMin ?? detail.plan.deadlineMin,
     currentPracticeStartMin: ov.currentPracticeStartMin ?? detail.plan.currentPracticeStartMin,
+    allowReorder: ov.allowReorder === true,
   };
   const snapshot = {
     plan: { id: detail.plan.id, date: detail.plan.planDate, revision: detail.plan.revision },
     tariff: { id: tariff.id, version: tariff.version, name: tariff.name, normalRatePaise: tariff.normalRatePaise, periods: tariff.periods },
     model: { fitId, version: model.version, kind: model.kind, coefficients: model.coefficients, n: model.n },
-    input: { ...input, pricePaise: undefined },
+    input: { ...input, pricePaise: undefined, allowReorder: undefined },
   };
   const hash = createHash("sha256")
     .update(JSON.stringify({ ...snapshot, model: { ...snapshot.model, fitId: undefined }, plan: { id: detail.plan.id, date: detail.plan.planDate } }))
     .digest("hex")
     .slice(0, 32);
-  return { input, hash, tariffVersionId: tariff.id, modelFitId: fitId, modelVersion: model.version, snapshot };
+  // The reorder option is a run choice, not an input: it is recorded but does not change the fingerprint.
+  return { input, hash, tariffVersionId: tariff.id, modelFitId: fitId, modelVersion: model.version, snapshot: { ...snapshot, options: { allowReorder: input.allowReorder === true } } };
 }
 
 export interface RunOutcome {
@@ -175,10 +179,10 @@ function predicted(current: ScheduleEvaluation, rec: ScheduleEvaluation) {
 
 const hhmm = (m: number | null) => (m === null ? "—" : `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`);
 
-export async function runOptimization(db: DB, actor: Actor, planId: string): Promise<RunOutcome> {
+export async function runOptimization(db: DB, actor: Actor, planId: string, opts: { allowReorder?: boolean } = {}): Promise<RunOutcome> {
   requirePerm(actor, "optimizer.run");
   const f = actor.factory;
-  const built = await buildInput(db, actor, planId);
+  const built = await buildInput(db, actor, planId, { allowReorder: opts.allowReorder === true });
   const detail = (await getPlan(db, actor, planId))!;
 
   // Data-quality gate: advice pauses when the reference day's meter data is incomplete.
@@ -273,7 +277,7 @@ export async function runOptimization(db: DB, actor: Actor, planId: string): Pro
       .where(eq(recommendations.planId, planId));
     const recVersion = Number(verRow[0]?.v ?? 0) + 1;
     recommendationId = newId("rec");
-    const summary = `Start first heat ${hhmm(p.current.firstStartMin)} → ${hhmm(p.recommended.firstStartMin)}; holding ${p.current.holdMinutes} → ${p.recommended.holdMinutes} min; last tap ${hhmm(p.recommended.lastTapMin)}.`;
+    const summary = `Start first heat ${hhmm(p.current.firstStartMin)} → ${hhmm(p.recommended.firstStartMin)}; holding ${p.current.holdMinutes} → ${p.recommended.holdMinutes} min; last tap ${hhmm(p.recommended.lastTapMin)}.${result.reordered ? ` Heat order changed within orders: ${result.recommended.items.map((i) => i.label).join(", ")}.` : ""}`;
     await tx.insert(recommendations).values({
       id: recommendationId,
       factoryId: f.id,
@@ -351,6 +355,8 @@ export interface WhatIfResult {
   blocking: string[];
   current: { costPaise: number; kwh: number; holdMinutes: number; firstStartMin: number | null; lastTapMin: number | null };
   recommended: { costPaise: number; kwh: number; holdMinutes: number; firstStartMin: number | null; lastTapMin: number | null } | null;
+  reordered: boolean;
+  sequence: string[];
   /** Cost saved versus current practice, paise per tonne poured. */
   savingPaisePerTonne: number | null;
 }
@@ -372,6 +378,7 @@ export async function whatIf(db: DB, actor: Actor, planId: string, p: WhatIfPara
     availableFromMin: clampN(p.availableFromMin, 0, 1440),
     availableToMin: clampN(p.availableToMin, 0, 1440),
     currentPracticeStartMin: clampN(p.currentPracticeStartMin, 0, 1440),
+    allowReorder: p.allowReorder === true,
   };
   const built = await buildInput(db, actor, planId, ov);
   const r = optimise(built.input);
@@ -384,6 +391,8 @@ export async function whatIf(db: DB, actor: Actor, planId: string, p: WhatIfPara
     blocking: r.blocking.map((b) => `${b.constraint}: ${b.detail}`),
     current: pick(r.current),
     recommended: rec ? pick(rec) : null,
+    reordered: r.reordered,
+    sequence: rec ? rec.items.map((i) => i.label) : [],
     savingPaisePerTonne: rec && rec.totals.tonnesPoured > 0 ? (r.current.totals.costPaise - rec.totals.costPaise) / rec.totals.tonnesPoured : null,
   };
 }
