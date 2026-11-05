@@ -81,3 +81,18 @@ describe("reorder option", () => {
     expect(re.sequence.length).toBe(fixed.sequence.length);
   });
 });
+
+describe("what-if units", () => {
+  it("returns money in paise on the same scale as a real run's prediction", async () => {
+    const a = await t.actor(IDS.supervisorA);
+    const planId = (await getPlan(t.db, a))!.plan.id;
+    const w = await whatIf(t.db, a, planId, {});
+    const run = await runOptimization(t.db, a, planId);
+    const rec = await getRecommendation(t.db, a, run.recommendationId!);
+    const p = rec!.rec.predicted as { current: { costPaise: number }; recommended: { costPaise: number } };
+    expect(w.current.costPaise).toBeCloseTo(p.current.costPaise, 3);
+    expect(w.recommended!.costPaise).toBeCloseTo(p.recommended.costPaise, 3);
+    // About 4,000 kWh at roughly ₹6–10 per kWh: tens of thousands of rupees, i.e. millions of paise.
+    expect(w.current.costPaise).toBeGreaterThan(2_000_000);
+  });
+});

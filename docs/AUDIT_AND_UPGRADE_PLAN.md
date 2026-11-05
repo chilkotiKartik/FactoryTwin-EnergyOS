@@ -15,6 +15,10 @@ Audit date: 28 Oct 2026. Scope: the whole repository (≈13k lines): domain logi
 - Verification: multi-day baselines with 90% intervals and a plain verdict.
 - Ops: CI workflow, Dockerfile, error/loading/not-found pages, four new indexes and two migrations.
 
+**Added after the audit (Nov 2026):** patch-level dependency bumps; ingest authentication-failure throttling per address with a bounded limiter; 1-minute refinement of the optimiser; what-if panel; opt-in heat reordering within an order; shared-connection demand cap, other-plant load and peak kVA; sequential multi-furnace solver (domain level); model-term explanation on the heat page; installable tablet app with offline heat queue and “Now” buttons; Hindi and Marathi for navigation and heat entry; hosted-database configuration; service tests for exports, tariffs, plans and background analysis (83% → 87% lines).
+
+**Measured and deliberately not built:** a daily rollup table. Dashboard queries are 16–131 ms at about 124 days of one-minute data (see docs/DEPLOYMENT.md, Capacity), so a rollup would add staleness risk for no visible gain yet. Raw-data retention was also not built: deleting readings is irreversible and the volume (about 525,000 rows per meter per year) is small.
+
 **Not done yet**, because each is a project of its own or needs hardware:
 
 - Edge gateway for Modbus / MQTT / OPC UA meters (the server side of counters and drift is ready).

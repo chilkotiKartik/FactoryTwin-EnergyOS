@@ -20,7 +20,8 @@ A derived figure is MEASURED only if every input is MEASURED.
 - Tariff: ₹8.00/kWh normal; 09:00–17:00 solar at −20% (₹6.40); 18:00–22:00 peak at 1.20× (₹9.60). Consistent with the Electricity (Rights of Consumers) Amendment Rules 2023; **not** a specific state tariff order. Replace with your DISCOM's order and mark it VERIFIED.
 - Grid factor 0.727 kg CO₂/kWh (CEA CO₂ Baseline Database v20.0, FY 2023-24, as cited in the deck). A newer CEA version exists; update before relying on it.
 - Business case: ₹0.9 lakh capex, ₹5,000/month opex, 300 operating days, 100% realisation (editable on Verification).
-- Optimiser grid 5 minutes; fixed heat sequence; holding cap 60 minutes.
+- Optimiser grid 5 minutes (refined to 1 minute around the optimum); heat sequence fixed unless reordering within an order is requested; holding cap 60 minutes.
+- Shared connection (optional): power factor 0.95 (ASSUMPTION until measured); other-plant load as two levels (06:00–22:00 and overnight); contract demand as a hard cap. Demand-charge effects are shown as an upper bound that applies only if the day sets the month's billing peak.
 
 ## Deck reference vs this app
 
@@ -40,12 +41,13 @@ The app recomputes the deck's illustrative figures from its own synthetic data (
 
 - No field validation. All Foundry A data is synthetic.
 - Predictions are not savings. Savings appear only after an outcome is recorded and verified, and they inherit the label of the data (SIMULATED in the demo).
-- The optimiser is exact for its stated model, not for the real plant. It does not reorder heats, model cranes, ladles, labour, power factor or demand charges.
+- The optimiser is exact for its stated model, not for the real plant. It does not model cranes, ladles or labour. Reordering is limited to heats of the same order and is a bounded search. Demand is modelled as one furnace plus two flat levels of other load, billed on 15-minute block averages; kVAh billing and a time-varying other load are not modelled. Several furnaces are scheduled only in a domain-level priority heuristic, not in the application.
 - The expected-energy model is linear in tonnes, cold start and holding minutes. It ignores charge mix, superheat, lining wear and lid practice.
 - Holding detection depends on meter resolution; 1-minute data is assumed.
 - No integration with a real meter, MES or ERP has been tested. The ingest API has been tested only with synthetic requests in automated tests.
 - No machine control. The app has no write path to any equipment.
-- SQLite suits one site; multi-site use should move to PostgreSQL.
+- SQLite suits one site. A hosted libSQL / Turso database is supported by configuration (`DATABASE_AUTH_TOKEN`) but has not been run against a live hosted instance here; background jobs and rate limiters still assume one long-running server.
+- Hindi and Marathi text covers navigation, heat entry and sync only, and is an unreviewed draft.
 
 ## Sources
 

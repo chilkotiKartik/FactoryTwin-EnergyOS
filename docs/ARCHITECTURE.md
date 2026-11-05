@@ -58,7 +58,15 @@ Hard constraints: one heat at a time with turnaround; tap no earlier than mould 
 
 Objective (lexicographic): energy cost, then holding minutes, then earliest last tap.
 
-Method: exact dynamic programme over states (heat index, tap minute of the previous heat). It is optimal for this model and grid. The chosen schedule is then re-evaluated by an independent checker (`evaluateSchedule`) and every constraint result is shown. A unit test compares the DP against exhaustive search. If no schedule exists, the optimiser builds the earliest possible schedule and reports which constraints block (for example "H09 cannot tap before 15:55; cut-off 15:30"); it never relaxes a hard constraint.
+Method: exact dynamic programme over states (heat index, tap minute of the previous heat), on the start grid, then re-solved at 1-minute resolution around the grid optimum and around current practice so an off-grid schedule cannot beat the answer. It is optimal for this model on the grid for the given sequence.
+
+Optional extensions, both off unless asked for:
+
+- **Reordering** (`allowReorder`): a bounded local search (at most 120 DP evaluations or 1.5 s) swaps heats only between slots of the same order, scoring each candidate with the exact DP, and accepts a new order only if it saves at least ₹1. An independent `sequence` check confirms nothing was added, dropped or moved between orders. The result is a good schedule, not a proven optimum, and the supervisor must confirm those mould sets can be poured in that order.
+- **Shared connection** (`site`): other-plant load by minute (day and overnight levels) and an optional hard cap. The DP skips any start whose melting or holding would take base load plus furnace above the cap in any minute; `evaluateSchedule` re-checks every minute independently. Peak demand is reported as the highest 15-minute block average in kVA at the site power factor. A schedule that fixes a violated hard limit counts as a meaningful recommendation even if it costs slightly more.
+- **Several furnaces** (`optimiseSite`): solves furnaces one after another, each seeing the base load plus the recommended load of earlier ones, so the cap holds by construction. A priority heuristic at domain level; the application data model is still one furnace per factory, so this is not yet reachable from the UI.
+
+ The chosen schedule is then re-evaluated by an independent checker (`evaluateSchedule`) and every constraint result is shown. A unit test compares the DP against exhaustive search. If no schedule exists, the optimiser builds the earliest possible schedule and reports which constraints block (for example "H09 cannot tap before 15:55; cut-off 15:30"); it never relaxes a hard constraint.
 
 Every run stores a snapshot and SHA-256 fingerprint of its inputs (plan revision, tariff version, model coefficients, process parameters). A pending recommendation becomes **stale** when the fingerprint changes, and a stale recommendation cannot be approved. Advice pauses when the reference day's meter completeness is below the configured minimum (98% by default).
 

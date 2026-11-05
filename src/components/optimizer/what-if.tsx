@@ -103,9 +103,9 @@ export function WhatIf({ planId, defaults }: { planId: string; defaults: Default
         ) : null}
         {res && rec ? (
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-[13px] sm:grid-cols-4">
-            <Metric label="Cost today (current practice)" value={inr(res.current.costPaise / 100)} />
-            <Metric label="Cost recommended" value={inr(rec.costPaise / 100)} />
-            <Metric label="Saving per tonne" value={res.savingPaisePerTonne === null ? "—" : inr(res.savingPaisePerTonne / 100)} strong />
+            <Metric label="Cost today (current practice)" value={inr(res.current.costPaise)} />
+            <Metric label="Cost recommended" value={inr(rec.costPaise)} />
+            <Metric label="Saving per tonne" value={res.savingPaisePerTonne === null ? "—" : inr(res.savingPaisePerTonne)} strong />
             <Metric label="Holding" value={`${fmt(res.current.holdMinutes)} → ${fmt(rec.holdMinutes)} min`} />
             <Metric label="First start" value={`${hhmm(res.current.firstStartMin)} → ${hhmm(rec.firstStartMin)}`} />
             <Metric label="Last tap" value={`${hhmm(res.current.lastTapMin)} → ${hhmm(rec.lastTapMin)}`} />
