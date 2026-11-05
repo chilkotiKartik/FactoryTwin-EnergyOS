@@ -519,7 +519,6 @@ export function optimise(input: OptimizerInput): OptimizerResult {
     };
   }
 
-  const n = input.heats.length;
   let explored = 0;
   const coarse = solveDp(input, null);
   explored += coarse.explored;
