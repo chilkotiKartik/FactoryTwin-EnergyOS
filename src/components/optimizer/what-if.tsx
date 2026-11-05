@@ -21,6 +21,7 @@ interface Defaults {
  * Nothing is saved; no run, recommendation or approval is created.
  */
 export function WhatIf({ planId, defaults }: { planId: string; defaults: Defaults }) {
+  const [reorder, setReorder] = useState(false);
   const [p, setP] = useState({ solar: 100, peak: 100, ...defaults });
   const [res, setRes] = useState<WhatIfResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -40,6 +41,7 @@ export function WhatIf({ planId, defaults }: { planId: string; defaults: Default
         availableFromMin: p.availableFromMin,
         availableToMin: p.availableToMin,
         currentPracticeStartMin: p.currentPracticeStartMin,
+        allowReorder: reorder,
       };
       const r = await whatIfAction(planId, params);
       if (my !== seq.current) return; // a newer request superseded this one
@@ -49,7 +51,7 @@ export function WhatIf({ planId, defaults }: { planId: string; defaults: Default
       setRes(r.data);
     }, 300);
     return () => clearTimeout(t);
-  }, [p, planId]);
+  }, [p, planId, reorder]);
 
   const reset = () => setP({ solar: 100, peak: 100, ...defaults });
   const rec = res?.recommended ?? null;
@@ -66,6 +68,11 @@ export function WhatIf({ planId, defaults }: { planId: string; defaults: Default
         <Slider id="wi-from" label="Furnace available from" value={p.availableFromMin} min={0} max={720} step={15} display={hhmm(p.availableFromMin)} onChange={(availableFromMin) => setP({ ...p, availableFromMin })} />
         <Slider id="wi-start" label="Current practice starts" value={p.currentPracticeStartMin} min={0} max={720} step={5} display={hhmm(p.currentPracticeStartMin)} onChange={(currentPracticeStartMin) => setP({ ...p, currentPracticeStartMin })} />
       </div>
+
+      <label className="flex items-center gap-2 text-[13px] text-ink-2">
+        <input type="checkbox" checked={reorder} onChange={(e) => setReorder(e.target.checked)} className="size-4" />
+        Allow reordering heats within an order
+      </label>
 
       <div className="rounded-md border border-line bg-surface-2 p-3" aria-live="polite">
         <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -97,6 +104,7 @@ export function WhatIf({ planId, defaults }: { planId: string; defaults: Default
             <Metric label="Last tap" value={`${hhmm(res.current.lastTapMin)} → ${hhmm(rec.lastTapMin)}`} />
             <Metric label="Energy" value={`${fmt(res.current.kwh)} → ${fmt(rec.kwh)} kWh`} />
             <Metric label="Solved in" value={`${fmt(res.runtimeMs, 0)} ms`} />
+            {res.reordered ? <Metric label="New heat order" value={res.sequence.join(" → ")} /> : null}
           </dl>
         ) : null}
       </div>

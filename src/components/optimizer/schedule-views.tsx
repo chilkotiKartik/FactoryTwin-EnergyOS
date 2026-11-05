@@ -91,12 +91,13 @@ export function ScheduleTable({ current, recommended }: { current: ItemLike[]; r
       </thead>
       <tbody>
         {recommended.map((r, i) => {
-          const c = current[i];
+          const c = current.find((x) => (x.label ?? x.heatNo) === (r.label ?? r.heatNo));
           const moved = c && c.startMin !== r.startMin;
           return (
             <tr key={i}>
               <Td className="font-medium">
                 {r.label ?? r.heatNo}
+                {current[i] && (current[i].label ?? current[i].heatNo) !== (r.label ?? r.heatNo) ? <span className="ml-1.5 text-[11px] font-normal text-amber">moved from position {current.findIndex((x) => (x.label ?? x.heatNo) === (r.label ?? r.heatNo)) + 1} to {i + 1}</span> : null}
                 {r.cold ? <span className="ml-1.5 text-[11px] font-normal text-blue">cold start</span> : null}
               </Td>
               <Td align="right">{hhmm(r.mouldReadyMin)}</Td>

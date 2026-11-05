@@ -165,8 +165,8 @@ export async function whatIfAction(planId: string, params: WhatIfParams): Promis
   return withActor((db, a) => whatIf(db, a, planId, params), { readOnly: true });
 }
 
-export async function runOptimizationAction(planId: string): Promise<ActionResult<RunOutcome>> {
-  return withActor((db, a) => runOptimization(db, a, planId));
+export async function runOptimizationAction(planId: string, opts: { allowReorder?: boolean } = {}): Promise<ActionResult<RunOutcome>> {
+  return withActor((db, a) => runOptimization(db, a, planId, { allowReorder: opts?.allowReorder === true }));
 }
 
 export async function decideAction(input: unknown) {

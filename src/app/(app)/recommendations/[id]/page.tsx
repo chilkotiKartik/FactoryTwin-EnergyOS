@@ -66,7 +66,7 @@ export default async function RecommendationPage(props: PageProps<"/recommendati
             </Panel>
           ) : null}
           <Panel>
-            <PanelHeader title="Current practice vs proposed" subtitle="Same heats, same sequence, same tonnes. Only start times move." />
+            <PanelHeader title="Current practice vs proposed" subtitle={result.reordered ? "Same heats and tonnes. Start times move and heat order changes within orders; confirm those mould sets can be poured in this order." : "Same heats, same sequence, same tonnes. Only start times move."} />
             <PanelBody>
               <ScheduleCompare current={current} recommended={proposed} recommendedLabel="Proposed" bands={bands.bands} deadlineMin={plan.deadlineMin} downtime={plan.downtime} />
             </PanelBody>

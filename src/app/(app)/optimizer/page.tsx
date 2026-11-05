@@ -84,7 +84,7 @@ export default async function OptimizerPage(props: PageProps<"/optimizer">) {
       <PageHeader
         title="Schedule optimiser"
         crumbs={[{ label: actor.factory.name }, { label: "Optimiser" }]}
-        description="Finds the lowest-cost start times for the planned heats without changing production, the heat sequence, or any safety and mould constraint. It proposes; a supervisor decides."
+        description="Finds the lowest-cost start times for the planned heats without changing production or any safety and mould constraint. By default the heat sequence is kept; you can allow reordering within an order. It proposes; a supervisor decides."
         actions={
           plans.length > 1 ? (
             <div className="flex flex-wrap gap-1">
@@ -211,7 +211,7 @@ export default async function OptimizerPage(props: PageProps<"/optimizer">) {
                 </PanelBody>
               </Panel>
               <Panel>
-                <PanelHeader title="Heat-by-heat schedule" subtitle="Current practice → recommended. Sequence and charge are unchanged." />
+                <PanelHeader title="Heat-by-heat schedule" subtitle={result.reordered ? "Current practice → recommended. Heat order changes within orders; charges are unchanged. Confirm those mould sets can be poured in this order." : "Current practice → recommended. Sequence and charge are unchanged."} />
                 <ScheduleTable current={result.current.items} recommended={result.recommended.items} />
               </Panel>
             </>
@@ -241,7 +241,7 @@ export default async function OptimizerPage(props: PageProps<"/optimizer">) {
               <PanelHeader title="Solver" />
               <PanelBody className="grid gap-x-6 gap-y-2 text-[13px] sm:grid-cols-2">
                 <Meta k="Status" v={result.status} />
-                <Meta k="Method" v={`${result.solver} v${result.solverVersion} (exact dynamic programme)`} />
+                <Meta k="Method" v={`${result.solver} v${result.solverVersion} (exact dynamic programme)${result.reordered ? " + bounded reorder search" : ""}`} />
                 <Meta k="Runtime" v={`${fmt(result.runtimeMs, 1)} ms · ${fmt(result.statesExplored)} states`} />
                 <Meta k="Input fingerprint" v={<code className="font-mono text-[12px]">{run!.inputHash.slice(0, 16)}</code>} />
                 <Meta k="Tariff" v={snapshot?.tariff ? `${snapshot.tariff.name} (v${snapshot.tariff.version})` : "—"} />

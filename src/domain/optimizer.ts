@@ -79,6 +79,11 @@ export interface OptimizerInput {
   deadlineMin: number;
   /** Start minute used by current practice (start at shift start, recharge right after tap). */
   currentPracticeStartMin: number;
+  /**
+   * Let the solver reorder heats, but only between slots of the same order (same grade).
+   * Off by default: the sequence is then fixed as given.
+   */
+  allowReorder?: boolean;
 }
 
 export interface ScheduledHeat {
@@ -145,6 +150,10 @@ export interface OptimizerResult {
   earliestPossible: ScheduleEvaluation | null;
   warnings: string[];
   optimalityNote: string;
+  /** Heat keys in the order of the recommended schedule (the given order when not reordered). */
+  sequence: string[];
+  /** True when the recommended sequence differs from the given one. */
+  reordered: boolean;
 }
 
 const fmt = (m: number) => {
@@ -429,7 +438,14 @@ export function earliestSchedule(input: OptimizerInput): { starts: number[] | nu
  * Exact dynamic programme over (heat index, tap minute). With `cand` null the start
  * times are the grid; otherwise each heat may start only at the listed minutes.
  */
-function solveDp(input: OptimizerInput, cand: number[][] | null): { starts: number[] | null; explored: number } {
+interface DpSolution {
+  starts: number[] | null;
+  explored: number;
+  cost: number;
+  hold: number;
+}
+
+function solveDp(input: OptimizerInput, cand: number[][] | null): DpSolution {
   const pre = prefix(input.pricePaise);
   const g = input.gridMinutes;
   const n = input.heats.length;
@@ -482,7 +498,8 @@ function solveDp(input: OptimizerInput, cand: number[][] | null): { starts: numb
     const c = last[tap];
     if (c && (bestTap === -1 || better(c, last[bestTap]))) bestTap = tap;
   }
-  if (bestTap === -1) return { starts: null, explored };
+  if (bestTap === -1) return { starts: null, explored, cost: Infinity, hold: Infinity };
+  const { cost, hold } = last[bestTap]!;
   const starts = new Array<number>(n);
   let tap = bestTap;
   for (let k = n - 1; k >= 0; k--) {
@@ -490,7 +507,95 @@ function solveDp(input: OptimizerInput, cand: number[][] | null): { starts: numb
     starts[k] = c.start;
     tap = c.prevTap;
   }
-  return { starts, explored };
+  return { starts, explored, cost, hold };
+}
+
+/** Heats in a new order: slot `pos` takes original heat `perm[pos]`. */
+function permute(input: OptimizerInput, perm: number[]): OptimizerInput {
+  return { ...input, heats: perm.map((i) => input.heats[i]), meltKwh: perm.map((i) => input.meltKwh[i]) };
+}
+
+/** A reorder must save at least this much (paise) to be proposed; below it the given sequence stands. */
+export const REORDER_MIN_GAIN_PAISE = 100;
+const REORDER_MAX_EVALS = 120;
+const REORDER_MAX_MS = 1500;
+
+function betterSolution(a: DpSolution, b: DpSolution): boolean {
+  if (!a.starts) return false;
+  if (!b.starts) return true;
+  return a.cost < b.cost - REORDER_MIN_GAIN_PAISE;
+}
+
+/**
+ * Local search over heat order. A heat may only swap places with another heat of the
+ * same order, so grade and order grouping are never mixed. Starts from "earliest mould
+ * first" within each order, then hill-climbs on pairwise swaps, scoring every candidate
+ * with the exact DP. Bounded in evaluations and time; returns null when nothing beats
+ * the given sequence by at least REORDER_MIN_GAIN_PAISE.
+ */
+function searchSequence(input: OptimizerInput, base: DpSolution): { perm: number[]; solution: DpSolution; explored: number } | null {
+  const n = input.heats.length;
+  const groups = new Map<string, number[]>();
+  input.heats.forEach((h, i) => {
+    if (h.orderId) groups.set(h.orderId, [...(groups.get(h.orderId) ?? []), i]);
+  });
+  const multi = [...groups.values()].filter((g) => g.length > 1);
+  if (multi.length === 0) return null;
+
+  const t0 = performance.now();
+  let evals = 0;
+  let explored = 0;
+  let bestPerm = Array.from({ length: n }, (_, i) => i);
+  let best = base;
+  const consider = (perm: number[]): boolean => {
+    const sol = solveDp(permute(input, perm), null);
+    evals++;
+    explored += sol.explored;
+    if (betterSolution(sol, best)) {
+      best = sol;
+      bestPerm = perm;
+      return true;
+    }
+    return false;
+  };
+
+  // Seed: within each order, earliest mould-ready heat first.
+  const seed = bestPerm.slice();
+  for (const g of multi) {
+    const sorted = [...g].sort((a, b) => (input.heats[a].mouldReadyMin ?? Infinity) - (input.heats[b].mouldReadyMin ?? Infinity) || a - b);
+    g.forEach((pos, k) => (seed[pos] = sorted[k]));
+  }
+  consider(seed);
+
+  for (let improved = true; improved && evals < REORDER_MAX_EVALS && performance.now() - t0 < REORDER_MAX_MS; ) {
+    improved = false;
+    for (const g of multi)
+      for (let x = 0; x < g.length; x++)
+        for (let y = x + 1; y < g.length; y++) {
+          if (evals >= REORDER_MAX_EVALS || performance.now() - t0 >= REORDER_MAX_MS) break;
+          const cand = bestPerm.slice();
+          [cand[g[x]], cand[g[y]]] = [cand[g[y]], cand[g[x]]];
+          if (consider(cand)) improved = true;
+        }
+  }
+  return bestPerm.every((v, i) => v === i) ? null : { perm: bestPerm, solution: best, explored };
+}
+
+/** Independent check that only same-order heats changed places and nothing was dropped or duplicated. */
+function sequenceCheck(original: OptimizerInput, items: { key: string }[]): ConstraintCheck {
+  const keys = items.map((i) => i.key);
+  const sameSet = keys.length === original.heats.length && new Set(keys).size === keys.length && original.heats.every((h) => keys.includes(h.key));
+  const slotsOk = original.heats.every((h, pos) => {
+    const moved = original.heats.find((x) => x.key === keys[pos]);
+    return moved !== undefined && moved.orderId === h.orderId;
+  });
+  const moves = original.heats.filter((h, pos) => keys[pos] !== h.key).length;
+  return {
+    id: "sequence",
+    label: "Heat sequence",
+    status: sameSet && slotsOk ? "PASS" : "FAIL",
+    detail: !(sameSet && slotsOk) ? "The recommended sequence adds, drops or moves heats between orders." : moves === 0 ? "Heat sequence unchanged." : `${moves} heats changed place, only within their own order. Confirm those mould sets can be poured in this order.`,
+  };
 }
 
 export function optimise(input: OptimizerInput): OptimizerResult {
@@ -499,6 +604,9 @@ export function optimise(input: OptimizerInput): OptimizerResult {
   const current = evaluateSchedule(input, currentPracticeStarts(input));
   if (!current.feasible) warnings.push("The current-practice schedule breaks at least one hard limit; see its checks.");
   const optimalityNote =
+    (input.allowReorder
+      ? "Heat order may change only between heats of the same order; that search is bounded, so a reordered result is a good schedule rather than a proven optimum. For the sequence it ends with: "
+      : "") +
     "Exact optimum of the stated model: fixed heat sequence, start times on a " +
     `${input.gridMinutes}-minute grid refined to 1-minute starts around the grid optimum, expected-energy model for melting, ${input.process.holdingKw} kW holding. Not a claim of global optimality for the real plant.`;
 
@@ -516,28 +624,40 @@ export function optimise(input: OptimizerInput): OptimizerResult {
       earliestPossible: null,
       warnings,
       optimalityNote,
+      sequence: input.heats.map((h) => h.key),
+      reordered: false,
     };
   }
 
   let explored = 0;
-  const coarse = solveDp(input, null);
+  let coarse = solveDp(input, null);
   explored += coarse.explored;
+  let work = input;
+  if (input.allowReorder && input.heats.length > 1) {
+    const found = searchSequence(input, coarse);
+    if (found) {
+      explored += found.explored;
+      work = permute(input, found.perm);
+      coarse = found.solution;
+    }
+  }
+  const reordered = work !== input;
   let bestStarts = coarse.starts;
   if (coarse.starts && input.gridMinutes > 1) {
     // Refine: re-solve at 1-minute resolution around the grid optimum (and around
     // current practice), so a schedule that is not on the grid cannot beat the answer.
-    const cur = currentPracticeStarts(input);
+    const cur = currentPracticeStarts(work);
     const cand = coarse.starts.map((s, k) => {
       const set = new Set<number>();
       for (let d = -input.gridMinutes; d <= input.gridMinutes; d++) set.add(s + d);
       for (let d = -input.gridMinutes; d <= input.gridMinutes; d++) set.add(cur[k] + d);
       return [...set].filter((x) => x >= 0 && x <= 1440).sort((x, y) => x - y);
     });
-    const fine = solveDp(input, cand);
+    const fine = solveDp(work, cand);
     explored += fine.explored;
     if (fine.starts) {
-      const a = evaluateSchedule(input, coarse.starts);
-      const b = evaluateSchedule(input, fine.starts);
+      const a = evaluateSchedule(work, coarse.starts);
+      const b = evaluateSchedule(work, fine.starts);
       if (b.feasible && (b.totals.costPaise < a.totals.costPaise - EPS || (Math.abs(b.totals.costPaise - a.totals.costPaise) <= EPS && b.totals.holdMinutes < a.totals.holdMinutes))) {
         bestStarts = fine.starts;
       }
@@ -597,11 +717,15 @@ export function optimise(input: OptimizerInput): OptimizerResult {
       earliestPossible,
       warnings,
       optimalityNote,
+      sequence: input.heats.map((h) => h.key),
+      reordered: false,
     };
   }
 
   const starts = bestStarts!;
-  const recommended = evaluateSchedule(input, starts);
+  const recommended = evaluateSchedule(work, starts);
+  recommended.checks.push(sequenceCheck(input, recommended.items));
+  recommended.feasible = recommended.checks.every((c) => c.status === "PASS");
   if (!recommended.feasible) {
     // Should not happen: the evaluator re-checks the solver independently.
     warnings.push("Independent check found a violated limit in the solver output; recommendation withheld.");
@@ -617,6 +741,8 @@ export function optimise(input: OptimizerInput): OptimizerResult {
       earliestPossible: null,
       warnings,
       optimalityNote,
+      sequence: input.heats.map((h) => h.key),
+      reordered: false,
     };
   }
   if (recommended.totals.costPaise > current.totals.costPaise + EPS && current.feasible) {
@@ -634,5 +760,7 @@ export function optimise(input: OptimizerInput): OptimizerResult {
     earliestPossible: null,
     warnings,
     optimalityNote,
+    sequence: recommended.items.map((i) => i.key),
+    reordered,
   };
 }
