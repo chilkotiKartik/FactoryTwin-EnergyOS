@@ -6,7 +6,7 @@ import { isIsoDate, localDayStart, localToUtc } from "@/domain/time";
 import type { Actor } from "../context";
 import { requirePerm } from "../context";
 import { audit } from "../audit";
-import { AppError, conflict, notFound, validation } from "../errors";
+import { AppError, conflict, forbidden, notFound, validation } from "../errors";
 import { newId } from "../ids";
 import { requireFurnace } from "./common";
 
@@ -145,6 +145,7 @@ export async function createPlan(db: DB, actor: Actor, raw: unknown) {
   if (!parsed.success) throw validation(parsed.error.issues[0]?.message ?? "Invalid plan.");
   const input = parsed.data;
   const f = actor.factory;
+  if (f.isSimulation) throw forbidden("Plans in a simulation factory come from the scenario; load one under Scenario control.");
   const furnace = await requireFurnace(db, f.id);
   if (input.chargeKg > furnace.capacityKg) throw validation(`Charge cannot exceed furnace capacity (${furnace.capacityKg} kg).`, { chargeKg: "Above capacity" });
   const exists = await db.query.productionPlans.findFirst({
