@@ -8,6 +8,9 @@ import { selectedDay } from "@/server/day";
 import { Sidebar } from "@/components/shell/sidebar";
 import { Topbar } from "@/components/shell/topbar";
 import { can } from "@/server/permissions";
+import { OfflineProvider } from "@/components/offline/offline-provider";
+import { OfflineBanner } from "@/components/offline/offline-banner";
+import { RegisterServiceWorker } from "@/components/offline/register-sw";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const actor = await requireActor();
@@ -35,6 +38,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     ...high.map((a) => ({ id: a.id, kind: "anomaly" as const, title: `${a.heatNo} on ${a.dayDate}: high energy variance`, body: a.explanation, href: `/heats/${a.heatId}` })),
   ];
   return (
+    <OfflineProvider userId={actor.userId} factoryId={actor.factory.id} timeZone={actor.factory.timeZone}>
+    <RegisterServiceWorker />
     <div className="min-h-dvh lg:pl-60">
       <Sidebar
         factoryName={actor.factory.name}
@@ -60,9 +65,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           sticky={!actor.factory.isSimulation}
         />
         <main id="main" className="print-full mx-auto w-full max-w-[1440px] flex-1 px-4 py-5 sm:px-6 lg:px-8">
+          <OfflineBanner />
           {children}
         </main>
       </div>
     </div>
+    </OfflineProvider>
   );
 }

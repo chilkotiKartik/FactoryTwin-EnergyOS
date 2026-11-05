@@ -7,7 +7,9 @@ import * as Popover from "@radix-ui/react-popover";
 import * as Menu from "@radix-ui/react-dropdown-menu";
 import { Bell, CalendarDays, ChevronDown, ClipboardCheck, LogOut, UserCog, Radio, TriangleAlert, WifiOff, FlaskConical, Building2 } from "lucide-react";
 import { toast } from "sonner";
-import { logoutAction, setDayAction, switchFactoryAction } from "@/app/actions";
+import { logoutAction, setDayAction, setLocaleAction, switchFactoryAction } from "@/app/actions";
+import { useT } from "@/lib/i18n/context";
+import { LOCALES, LOCALE_NAMES, isLocale } from "@/lib/i18n/messages";
 import { cn } from "@/lib/cn";
 import { dayLabel, localTime } from "@/lib/format";
 import { Tip } from "@/components/ui/tip";
@@ -52,6 +54,7 @@ export function Topbar({ actor, factories, activeFactoryId, mode, day, days, tim
   const router = useRouter();
   const [pending, start] = useTransition();
   const active = factories.find((f) => f.factoryId === activeFactoryId);
+  const { t, locale } = useT();
 
   return (
     <header className={cn("no-print z-20 border-b border-line bg-surface/95 backdrop-blur", sticky ? "sticky top-0" : "sticky top-[23px]")}>
@@ -112,6 +115,30 @@ export function Topbar({ actor, factories, activeFactoryId, mode, day, days, tim
 
         <div className="ml-auto flex items-center gap-2">
           <ModeBadge mode={mode} timeZone={timeZone} />
+
+          <label className="sr-only" htmlFor="lang-select">
+            {t("lang.label")}
+          </label>
+          <select
+            id="lang-select"
+            value={locale}
+            disabled={pending}
+            onChange={(e) =>
+              start(async () => {
+                if (!isLocale(e.target.value)) return;
+                const r = await setLocaleAction(e.target.value);
+                if (!r.ok) toast.error(r.message);
+                else router.refresh();
+              })
+            }
+            className="h-9 rounded-md border border-line-strong bg-surface px-2 text-[13px]"
+          >
+            {LOCALES.map((l) => (
+              <option key={l} value={l}>
+                {LOCALE_NAMES[l]}
+              </option>
+            ))}
+          </select>
 
           <Popover.Root>
             <Popover.Trigger asChild>

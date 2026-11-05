@@ -7,6 +7,8 @@ const nextConfig: NextConfig = {
     return [
       // Pages get a per-request nonce policy from src/proxy.ts; this strict one covers the API.
       { source: "/api/:path*", headers: [{ key: "Content-Security-Policy", value: csp }] },
+      // The service worker must always be re-checked so a new version reaches tablets promptly.
+      { source: "/sw.js", headers: [{ key: "Cache-Control", value: "no-cache, no-store, must-revalidate" }, { key: "Service-Worker-Allowed", value: "/" }] },
       {
         source: "/:path*",
         headers: [
