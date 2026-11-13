@@ -1,6 +1,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { DB } from "@/db/client";
+import { lockKey } from "@/db/lock";
 import { recommendations, tariffPeriods, tariffVersions, users } from "@/db/schema";
 import { rateAt, validatePeriods, type TariffPeriod } from "@/domain/tariff";
 import { hhmmToMinute, localToUtc } from "@/domain/time";
@@ -72,6 +73,8 @@ export async function createTariffVersion(db: DB, actor: Actor, raw: unknown) {
   const version = Number(maxV[0]?.v ?? 0) + 1;
   const id = newId("tar");
   await db.transaction(async (tx) => {
+    // One writer per factory at a time for this check-then-write.
+    await lockKey(tx, actor.factory.id);
     await tx.insert(tariffVersions).values({
       id,
       factoryId: actor.factory.id,

@@ -1,0 +1,42 @@
+# What is left — roadmap
+
+Status as of 13 Nov 2026. Everything listed under "Done" is covered by tests (167 unit/integration tests on PostgreSQL 16 and PGlite, and 20 browser tests on desktop and phone). The rest is ordered by what it takes to go from a convincing demo to a paid pilot in a real foundry.
+
+## Done
+
+- Heat-level energy: meter ↔ heat linking, robust expected-energy model, holding detection, explainable anomalies with evidence levels.
+- Exact schedule optimiser (1-minute refined), opt-in reordering within an order, shared-connection demand cap, what-if sandbox.
+- Human decision loop: approve/reject, stale detection, outcome recording, per-tonne verification with confidence intervals.
+- Live India data: IEX Day-Ahead Market prices every 30 minutes; sourced research page with a savings calculator.
+- Tablet use: offline heat queue, "Now" buttons, installable app, Hindi and Marathi for navigation and heat entry; light/dark; phone layout.
+- Trust: tamper-evident audit chain, evidence labels on every figure, advisory-only (no write path to equipment).
+- Platform: PostgreSQL with advisory locks, shared rate limits and a durable job queue (safe on several instances); read-only Integration API with keys and OpenAPI; cron tick for sleeping/serverless hosts; Render Blueprint deployment.
+
+## Next — needed for a real pilot (weeks)
+
+| # | Item | Why it matters | Needs |
+|---|---|---|---|
+| 1 | **Real meter connection**: a small edge gateway (Modbus TCP/RTU, MQTT) that reads the plant's energy meter and pushes to `/api/ingest`, buffering offline | Today data arrives by CSV or a self-built push; a pilot needs it hands-free | A meter model and gateway hardware from the plant (for example Schneider EM6400 / PM5xxx, Secure Elite) |
+| 2 | **The plant's real tariff order** entered and marked VERIFIED | Every rupee figure depends on it | The DISCOM tariff order the plant is billed under |
+| 3 | **Update the grid emission factor** to CEA CO₂ Baseline Database v22.0 | Avoided-CO₂ claims must use the current version | Reading the v22 user guide |
+| 4 | **Native-speaker review** of Hindi and Marathi, then translate the remaining screens | Operators should not need English | A reviewer from the plant |
+| 5 | **Paid hosting** (Render Starter + Basic database, about US$13/month) | The free tier sleeps and the free database expires on 13 Dec 2026 | A decision and a card on the Render account |
+| 6 | **Email or WhatsApp alerts** through the existing signed webhook | Supervisors live on their phones | A gateway account (for example WhatsApp Business API) |
+
+## Then — scale (months)
+
+| # | Item | Notes |
+|---|---|---|
+| 7 | Several furnaces per factory, sharing one connection | The demand-cap optimiser exists; the data model is one furnace per factory. Needs furnace-level plans, meters and screens. |
+| 8 | Richer energy model: charge mix, tap temperature, lining age | Fields must first be captured on the heat form. |
+| 9 | Heat reordering by a full solver (MILP / CP-SAT) | Today: bounded local search within an order. |
+| 10 | In-shift re-planning when a heat runs late | The optimiser is day-ahead. |
+| 11 | Solar / battery on site | Would add a generation profile to the shared-connection model. |
+| 12 | Daily rollups and raw-data retention | Not needed yet (measured: 16–131 ms at 124 days); revisit beyond about a year of one-minute data or several sites. |
+| 13 | SSO (Google / Microsoft) for owners | Accounts are email + password today. |
+| 14 | Webhook DNS-rebinding protection | The host is checked by name and IP literal, not after DNS resolution. |
+
+## Not planned
+
+- **Controlling equipment.** EnergyOS advises; people decide and act. A wrong command to a furnace is a safety risk no saving justifies.
+- **Container packaging.** It is a plain Node.js app; the team does not want containers.

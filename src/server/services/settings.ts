@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { DB } from "@/db/client";
+import { lockKey } from "@/db/lock";
 import { factories, furnaces, memberships, recommendations, users } from "@/db/schema";
 import type { Actor } from "../context";
 import { requirePerm } from "../context";
@@ -53,6 +54,8 @@ export async function updateSettings(db: DB, actor: Actor, raw: unknown) {
   const v = parsed.data;
   const furnace = await requireFurnace(db, actor.factory.id);
   await db.transaction(async (tx) => {
+    // One writer per factory at a time for this check-then-write.
+    await lockKey(tx, actor.factory.id);
     await tx
       .update(factories)
       .set({

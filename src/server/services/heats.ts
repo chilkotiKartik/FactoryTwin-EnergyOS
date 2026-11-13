@@ -1,6 +1,7 @@
-import { and, asc, desc, eq, gte, like, lte, ne, or, sql, inArray, isNotNull, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, lte, ne, or, sql, inArray, isNotNull, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import type { DB } from "@/db/client";
+import { lockKey } from "@/db/lock";
 import { anomalies, heats, users } from "@/db/schema";
 import { isIsoDate, localDate, localToUtc } from "@/domain/time";
 import type { Actor } from "../context";
@@ -31,7 +32,7 @@ export async function listHeats(db: DB, actor: Actor, query: HeatListQuery) {
   if (query.day && isIsoDate(query.day)) conds.push(eq(heats.dayDate, query.day));
   if (query.q) {
     const q = `%${query.q.replace(/[%_]/g, "").slice(0, 40)}%`;
-    conds.push(or(like(heats.heatNo, q), like(heats.grade, q), like(heats.orderCode, q), like(heats.operatorNotes, q)));
+    conds.push(or(ilike(heats.heatNo, q), ilike(heats.grade, q), ilike(heats.orderCode, q), ilike(heats.operatorNotes, q)));
   }
   if (query.quality && ["COMPLETE", "PARTIAL", "NO_METER_DATA", "OPEN", "NOT_ANALYSED"].includes(query.quality)) {
     conds.push(eq(heats.dataQuality, query.quality as "COMPLETE"));
@@ -137,6 +138,8 @@ export async function createHeat(db: DB, actor: Actor, raw: unknown) {
   const input = parsed.data;
   const id = newId("het");
   await db.transaction(async (tx) => {
+    // One writer per factory at a time for this check-then-write.
+    await lockKey(tx, actor.factory.id);
     // Overlap and duplicate checks run inside the write transaction (SQLite
     // serialises writers), so two tablets cannot create overlapping heats.
     const v = await validateHeat(tx as unknown as DB, actor, input, null);
@@ -176,6 +179,8 @@ export async function updateHeat(db: DB, actor: Actor, id: string, expectedRevis
   if (!parsed.success) throw zodToValidation(parsed.error);
   const input = parsed.data;
   await db.transaction(async (tx) => {
+    // One writer per factory at a time for this check-then-write.
+    await lockKey(tx, actor.factory.id);
     const v = await validateHeat(tx as unknown as DB, actor, input, id);
     const changes = {
       heatNo: input.heatNo,
@@ -206,8 +211,9 @@ export async function updateHeat(db: DB, actor: Actor, id: string, expectedRevis
         updatedAt: Date.now(),
         revision: existing.revision + 1,
       })
-      .where(and(eq(heats.id, id), eq(heats.revision, expectedRevision)));
-    if (res.rowsAffected !== 1) throw conflict("The heat changed while saving. Reload and try again.");
+      .where(and(eq(heats.id, id), eq(heats.revision, expectedRevision)))
+      .returning({ id: heats.id });
+    if (res.length !== 1) throw conflict("The heat changed while saving. Reload and try again.");
     await audit(tx, actor, "heat.update", "heat", id, { heatNo: input.heatNo, changes: diff });
   });
   await analyseFactory(db, actor, "heat.update");

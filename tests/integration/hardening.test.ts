@@ -196,23 +196,18 @@ describe("ingest endpoint", () => {
   });
 });
 
-describe("hosted database configuration", () => {
-  it("warns about a hosted URL without a token, and about a token with a local file", async () => {
+describe("database configuration", () => {
+  it("accepts postgres and pglite URLs and refuses anything else", async () => {
     const { checkEnv } = await import("@/server/env");
-    expect(checkEnv({ DATABASE_URL: "libsql://x-y.turso.io", NODE_ENV: "test" } as NodeJS.ProcessEnv).warnings.join(" ")).toMatch(/DATABASE_AUTH_TOKEN is not set/);
-    expect(checkEnv({ DATABASE_URL: "libsql://x-y.turso.io", DATABASE_AUTH_TOKEN: "abcdefghijk", NODE_ENV: "test" } as NodeJS.ProcessEnv).warnings.join(" ")).not.toMatch(/AUTH_TOKEN/);
-    expect(checkEnv({ DATABASE_URL: "file:./a.db", DATABASE_AUTH_TOKEN: "abcdefghijk", NODE_ENV: "test" } as NodeJS.ProcessEnv).warnings.join(" ")).toMatch(/ignored/);
+    expect(() => checkEnv({ DATABASE_URL: "postgres://u:p@h:5432/d", NODE_ENV: "test" } as NodeJS.ProcessEnv)).not.toThrow();
+    expect(() => checkEnv({ DATABASE_URL: "pglite:./data/x", NODE_ENV: "test" } as NodeJS.ProcessEnv)).not.toThrow();
+    expect(() => checkEnv({ DATABASE_URL: "file:./a.db", NODE_ENV: "test" } as NodeJS.ProcessEnv)).toThrow(/DATABASE_URL/);
   });
-  it("warns on a serverless runtime, more so with a local file", async () => {
+  it("warns when an embedded database is used in production or on a serverless host", async () => {
     const { checkEnv } = await import("@/server/env");
-    const w = checkEnv({ VERCEL: "1", DATABASE_URL: "file:./a.db", NODE_ENV: "test" } as NodeJS.ProcessEnv).warnings.join(" ");
+    expect(checkEnv({ DATABASE_URL: "pglite:./d", NODE_ENV: "production", COOKIE_SECURE: "true", SEED_DEMO_USERS: "false" } as NodeJS.ProcessEnv).warnings.join(" ")).toMatch(/embedded PGlite/);
+    const w = checkEnv({ VERCEL: "1", DATABASE_URL: "pglite:./d", NODE_ENV: "test" } as NodeJS.ProcessEnv).warnings.join(" ");
     expect(w).toMatch(/Serverless runtime/);
     expect(w).toMatch(/does not persist/);
-  });
-  it("ignores an auth token for local files when opening a database", async () => {
-    const { createDb } = await import("@/db/client");
-    const { client } = createDb(`file:${t.url.slice(5)}`, "some-token-value");
-    expect(Number((await client.execute("select 1 as x")).rows[0].x)).toBe(1);
-    client.close();
   });
 });

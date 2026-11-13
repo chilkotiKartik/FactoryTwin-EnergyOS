@@ -1,30 +1,33 @@
 /**
  * Create / migrate the database and seed the demo.
  *   pnpm db:setup            migrate + seed (idempotent; keeps existing data)
- *   pnpm db:setup --reset    delete the database file first
+ *   pnpm db:setup --reset    local PGlite only: delete the data directory first
+ * DATABASE_URL: postgres://… for a server, or pglite:<dir> (default pglite:./data/pglite) locally.
  */
 import { existsSync, rmSync } from "node:fs";
+import path from "node:path";
+import { databaseUrl } from "../src/db/client";
 import { runMigrations } from "../src/db/migrate";
 import { seedAll } from "../src/server/bootstrap";
 
 async function main() {
-  const url = process.env.DATABASE_URL ?? "file:./data/energyos.db";
-  if (process.argv.includes("--reset") && url.startsWith("file:")) {
-    for (const suffix of ["", "-wal", "-shm", "-journal"]) {
-      const f = url.slice(5) + suffix;
-      if (existsSync(f)) rmSync(f);
-    }
-    console.log("Removed existing database.");
+  const url = databaseUrl();
+  const safe = url.replace(/\/\/[^@/]*@/, "//***@");
+  if (process.argv.includes("--reset")) {
+    if (!url.startsWith("pglite:")) throw new Error("--reset only deletes a local PGlite directory. Drop a server database yourself.");
+    const dir = path.resolve(url.slice("pglite:".length));
+    if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+    console.log("Removed existing local database.");
   }
   const t0 = Date.now();
-  const { db, client } = await runMigrations(url);
-  console.log(`Migrations applied (${url}).`);
-  const res = await seedAll(db, {
+  const h = await runMigrations(url);
+  console.log(`Migrations applied (${safe}).`);
+  const res = await seedAll(h.db, {
     demoPassword: process.env.DEMO_PASSWORD ?? "energyos-demo",
     seedDemoUsers: (process.env.SEED_DEMO_USERS ?? "true") !== "false",
   });
   console.log(res.created ? `Seeded demo factory and scenario "holding-anomaly" in ${Date.now() - t0} ms.` : "Base data already present; nothing seeded.");
-  client.close();
+  await h.close();
 }
 
 main().catch((e) => {

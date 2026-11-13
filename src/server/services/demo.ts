@@ -1,5 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { DB } from "@/db/client";
+import { lockKey } from "@/db/lock";
 import * as s from "@/db/schema";
 import {
   AS_RUN_DATE,
@@ -152,6 +153,8 @@ export async function resetScenario(db: DB, actor: Actor, key: string) {
   const grades = new Map(sc.orders.map((o) => [o.code, o.grade]));
 
   await db.transaction(async (tx) => {
+    // One writer per factory at a time for this check-then-write.
+    await lockKey(tx, actor.factory.id);
     await clearFactoryData(tx, f.id);
     // Tariff v1 (assumption from the deck), effective from well before the history.
     const tvId = newId("tar");

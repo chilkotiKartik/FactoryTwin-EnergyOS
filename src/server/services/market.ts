@@ -1,5 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import type { DB } from "@/db/client";
+import { lockKey } from "@/db/lock";
 import { marketPrices } from "@/db/schema";
 import { IEX_DAM_URL, IEX_SOURCE, parseIexDamSnapshot, type MarketDay } from "@/domain/iex";
 
@@ -38,6 +39,7 @@ export async function refreshIexDam(db: DB, fetchImpl: typeof fetch = fetch, now
 
 export async function storeMarketDay(db: DB, day: MarketDay, fetchedAt: number) {
   await db.transaction(async (tx) => {
+    await lockKey(tx, "market:IEX_DAM");
     await tx.delete(marketPrices).where(and(eq(marketPrices.source, IEX_SOURCE), eq(marketPrices.deliveryDate, day.date)));
     await tx.insert(marketPrices).values(day.blocks.map((b) => ({ source: IEX_SOURCE, deliveryDate: day.date, ...b, fetchedAt })));
   });

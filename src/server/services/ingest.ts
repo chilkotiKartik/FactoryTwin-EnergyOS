@@ -137,6 +137,7 @@ export async function ingestReadings(db: DB, token: string | null, raw: unknown)
     })
     .where(eq(meters.id, meter.id));
   await audit(db, null, "meter.ingest", "meter", meter.id, { received: parsed.data.readings.length, stored: rows.length, rejected: rejected.length }, factory.id);
-  if (rows.length) scheduleAnalysis(db, factory.id);
+  // Durably mark the factory for re-analysis before answering (survives restarts).
+  if (rows.length) await scheduleAnalysis(db, factory.id);
   return { meterId: meter.id, received: parsed.data.readings.length, accepted: rows.length, rejected, notes };
 }

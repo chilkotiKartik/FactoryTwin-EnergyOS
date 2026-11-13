@@ -1,6 +1,7 @@
 import Papa from "papaparse";
 import { and, asc, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import type { DB } from "@/db/client";
+import { lockKey } from "@/db/lock";
 import { importBatches, meterReadings, meters, users } from "@/db/schema";
 import { classifyReading, completeReading, findDuplicateTimestamps } from "@/domain/quality";
 import { localToUtc } from "@/domain/time";
@@ -166,6 +167,8 @@ export async function commitCsv(db: DB, actor: Actor, meterId: string, filename:
   const batchId = newId("imp");
   const keep = preview.rows.filter((r) => r.status === "ACCEPT" || r.status === "SUSPECT");
   await db.transaction(async (tx) => {
+    // One writer per factory at a time for this check-then-write.
+    await lockKey(tx, actor.factory.id);
     await tx.insert(importBatches).values({
       id: batchId,
       factoryId: actor.factory.id,

@@ -27,7 +27,8 @@ import { resetScenario } from "@/server/services/demo";
 import { updateSettings } from "@/server/services/settings";
 
 import { DAY_COOKIE } from "@/lib/constants";
-import { clientAddress, createRateLimiter } from "@/server/ratelimit";
+import { clientAddress } from "@/server/ratelimit";
+import { clearLimit, hitLimit, isLimited } from "@/server/services/limits";
 import { isLocale, LOCALE_COOKIE } from "@/lib/i18n/messages";
 
 async function withActor<T>(fn: (db: DB, actor: Actor) => Promise<T>, opts: { allowPendingPassword?: boolean; readOnly?: boolean } = {}): Promise<ActionResult<T>> {
@@ -47,8 +48,8 @@ async function withActor<T>(fn: (db: DB, actor: Actor) => Promise<T>, opts: { al
 
 // Login throttling: 5 failures per email and 20 per client address per minute.
 // In-process and bounded; a multi-instance deployment should move this to a shared store.
-const failures = createRateLimiter(5, 60_000);
-const ipFailures = createRateLimiter(20, 60_000);
+// Login throttling, shared by every server instance (database counters):
+// 5 failures per email and 20 per client address per minute.
 let dummyHash: Promise<string> | null = null;
 
 export async function loginAction(_prev: ActionResult | null, form: FormData): Promise<ActionResult> {
@@ -57,17 +58,20 @@ export async function loginAction(_prev: ActionResult | null, form: FormData): P
   if (!email || !password) return { ok: false, message: "Enter your email and password." };
   const h = await headers();
   const ipKey = clientAddress(h);
-  if (failures.blocked(email) || ipFailures.blocked(ipKey)) return { ok: false, message: "Too many attempts. Wait a minute and try again." };
   const db = getDb();
+  const emailKey = `login:email:${email}`;
+  const addrKey = `login:ip:${ipKey}`;
+  if ((await isLimited(db, emailKey, 5)) || (await isLimited(db, addrKey, 20))) return { ok: false, message: "Too many attempts. Wait a minute and try again." };
   const user = await db.query.users.findFirst({ where: eq(users.email, email) });
   // Always run scrypt, so the response time does not reveal whether the email exists.
   dummyHash ??= hashPassword("not-a-real-password");
   const ok = await verifyPassword(password, user?.passwordHash ?? (await dummyHash));
   if (!user || !ok || user.disabled) {
-    failures.hit(email);
-    ipFailures.hit(ipKey);
+    await hitLimit(db, emailKey, 5, 60_000);
+    await hitLimit(db, addrKey, 20, 60_000);
     return { ok: false, message: "Email or password is incorrect." };
   }
+  await clearLimit(db, emailKey);
   await db.delete(sessions).where(lt(sessions.expiresAt, Date.now()));
   await startSession(user.id);
   await audit(db, null, "auth.login", "user", user.id, { email }, null);
@@ -285,5 +289,21 @@ export async function refreshMarketAction(): Promise<ActionResult<{ date: string
     const r = await refreshIexDam(db);
     if (!r.ok) throw new AppError("VALIDATION", r.reason);
     return { date: r.date };
+  });
+}
+
+export async function createApiKeyAction(name: string): Promise<ActionResult<{ key: string }>> {
+  return withActor(async (db, a) => {
+    const { createApiKey } = await import("@/server/services/apikeys");
+    const r = await createApiKey(db, a, name);
+    return { key: r.key };
+  });
+}
+
+export async function revokeApiKeyAction(id: string): Promise<ActionResult<{ id: string }>> {
+  return withActor(async (db, a) => {
+    const { revokeApiKey } = await import("@/server/services/apikeys");
+    await revokeApiKey(db, a, id);
+    return { id };
   });
 }

@@ -1,16 +1,16 @@
 import path from "node:path";
-import { mkdirSync } from "node:fs";
-import { migrate } from "drizzle-orm/libsql/migrator";
-import { createDb } from "./client";
+import { migrate as migratePglite } from "drizzle-orm/pglite/migrator";
+import { migrate as migratePostgres } from "drizzle-orm/postgres-js/migrator";
+import type { PgliteDatabase } from "drizzle-orm/pglite";
+import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import { createDb, type DbHandle } from "./client";
 
-export async function runMigrations(url: string) {
-  if (url.startsWith("file:")) {
-    const file = url.slice(5);
-    if (file && !file.startsWith(":memory:")) mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
-  }
-  const { db, client } = createDb(url);
-  // WAL is a property of a local file; a hosted database manages its own journal.
-  if (url.startsWith("file:")) await client.execute("PRAGMA journal_mode = WAL");
-  await migrate(db, { migrationsFolder: path.resolve(process.cwd(), "drizzle") });
-  return { db, client };
+const MIGRATIONS = path.resolve(process.cwd(), "drizzle");
+
+/** Open a database and bring its schema up to date. Safe to run on every start. */
+export async function runMigrations(url: string): Promise<DbHandle> {
+  const h = createDb(url);
+  if (h.kind === "pglite") await migratePglite(h.db as unknown as PgliteDatabase, { migrationsFolder: MIGRATIONS });
+  else await migratePostgres(h.db as unknown as PostgresJsDatabase, { migrationsFolder: MIGRATIONS });
+  return h;
 }

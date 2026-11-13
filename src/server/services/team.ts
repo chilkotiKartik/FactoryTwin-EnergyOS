@@ -152,7 +152,10 @@ export async function changeOwnPassword(db: DB, actor: Actor, raw: unknown, keep
 
 /** End every session of the current user except this one. */
 export async function signOutEverywhere(db: DB, actor: Actor, keepSessionId: string | null) {
-  const res = await db.delete(sessions).where(keepSessionId ? and(eq(sessions.userId, actor.userId), ne(sessions.id, keepSessionId)) : eq(sessions.userId, actor.userId));
-  await audit(db, actor, "auth.sign_out_everywhere", "user", actor.userId, { ended: res.rowsAffected });
-  return res.rowsAffected;
+  const res = await db
+    .delete(sessions)
+    .where(keepSessionId ? and(eq(sessions.userId, actor.userId), ne(sessions.id, keepSessionId)) : eq(sessions.userId, actor.userId))
+    .returning({ id: sessions.id });
+  await audit(db, actor, "auth.sign_out_everywhere", "user", actor.userId, { ended: res.length });
+  return res.length;
 }

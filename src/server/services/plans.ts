@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, lt } from "drizzle-orm";
 import { z } from "zod";
 import type { DB } from "@/db/client";
+import { lockKey } from "@/db/lock";
 import { heats, mouldEvents, plannedHeats, productionOrders, productionPlans, recommendations } from "@/db/schema";
 import { isIsoDate, localDayStart, localToUtc } from "@/domain/time";
 import type { Actor } from "../context";
@@ -89,6 +90,8 @@ export async function updatePlan(db: DB, actor: Actor, raw: unknown) {
   }
   const dayStart = localDayStart(detail.plan.planDate, f.timeZone);
   await db.transaction(async (tx) => {
+    // One writer per factory at a time for this check-then-write.
+    await lockKey(tx, actor.factory.id);
     const res = await tx
       .update(productionPlans)
       .set({
@@ -98,8 +101,9 @@ export async function updatePlan(db: DB, actor: Actor, raw: unknown) {
         revision: detail.plan.revision + 1,
         updatedAt: Date.now(),
       })
-      .where(and(eq(productionPlans.id, detail.plan.id), eq(productionPlans.revision, input.expectedRevision)));
-    if (res.rowsAffected !== 1) throw conflict("The plan changed while saving. Reload and try again.");
+      .where(and(eq(productionPlans.id, detail.plan.id), eq(productionPlans.revision, input.expectedRevision)))
+      .returning({ id: productionPlans.id });
+    if (res.length !== 1) throw conflict("The plan changed while saving. Reload and try again.");
     for (const o of input.orders) {
       if (!detail.orders.some((x) => x.id === o.id)) throw validation("Unknown order.");
       await tx.update(productionOrders).set({ requiredTonnes: o.requiredTonnes, dueMin: o.dueMin }).where(and(eq(productionOrders.id, o.id), eq(productionOrders.planId, detail.plan.id)));
@@ -155,6 +159,8 @@ export async function createPlan(db: DB, actor: Actor, raw: unknown) {
   const planId = newId("pln");
   const orderId = newId("ord");
   await db.transaction(async (tx) => {
+    // One writer per factory at a time for this check-then-write.
+    await lockKey(tx, actor.factory.id);
     await tx.insert(productionPlans).values({
       id: planId,
       factoryId: f.id,

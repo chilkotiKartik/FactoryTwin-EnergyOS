@@ -113,8 +113,8 @@ describe("plans", () => {
 
 describe("background analysis", () => {
   it("debounces and flushes per factory, and ignores unknown factories", async () => {
-    scheduleAnalysis(t.db, IDS.facA, 60_000);
-    scheduleAnalysis(t.db, IDS.facA, 60_000); // second call replaces the first timer
+    await scheduleAnalysis(t.db, IDS.facA, 60_000);
+    await scheduleAnalysis(t.db, IDS.facA, 60_000); // second call replaces the first timer
     await flushAnalysis(t.db, IDS.facA);
     expect(await analyseAsSystem(t.db, "fac_missing", "test")).toBeNull();
     expect(await analyseAsSystem(t.db, IDS.facA, "test")).not.toBeNull();

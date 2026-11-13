@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import type { DB } from "@/db/client";
+import { lockKey } from "@/db/lock";
 import { anomalies, heats, meterReadings, modelFits, recommendations } from "@/db/schema";
 import { analyseHeat, ANOMALY_RULE, type HeatAnalysis } from "@/domain/anomaly";
 import { expectedGoodPracticeKwh, fitModel, physicsPrior, type FitRow, type EnergyModel } from "@/domain/model";
@@ -156,6 +157,8 @@ export async function analyseFactory(db: DB, actor: Actor, reason: string): Prom
   let flaggedCount = 0;
   const fresh: { id: string; heatId: string; heatNo: string; day: string; explanation: string }[] = [];
   await db.transaction(async (tx) => {
+    // One writer per factory at a time for this check-then-write.
+    await lockKey(tx, actor.factory.id);
     if (!reuse) {
       await tx.insert(modelFits).values({
         id: fitId,

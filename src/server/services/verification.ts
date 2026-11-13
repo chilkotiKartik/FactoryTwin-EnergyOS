@@ -1,6 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { DB } from "@/db/client";
+import { lockKey } from "@/db/lock";
 import * as s from "@/db/schema";
 import { avoidedEmissionsKg, payback, savings } from "@/domain/energy";
 import { isIsoDate } from "@/domain/time";
@@ -191,6 +192,8 @@ export async function createVerificationReport(
     where: and(eq(s.executionRecords.factoryId, actor.factory.id), eq(s.executionRecords.dayDate, input.comparisonDay)),
   });
   await db.transaction(async (tx) => {
+    // One writer per factory at a time for this check-then-write.
+    await lockKey(tx, actor.factory.id);
     await tx.insert(s.energyBaselines).values({
       id: newId("bsl"),
       factoryId: actor.factory.id,

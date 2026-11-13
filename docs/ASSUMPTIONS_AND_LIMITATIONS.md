@@ -46,7 +46,7 @@ The app recomputes the deck's illustrative figures from its own synthetic data (
 - Holding detection depends on meter resolution; 1-minute data is assumed.
 - No integration with a real meter, MES or ERP has been tested. The ingest API has been tested only with synthetic requests in automated tests.
 - No machine control. The app has no write path to any equipment.
-- SQLite suits one site. A hosted libSQL / Turso database is supported by configuration (`DATABASE_AUTH_TOKEN`) but has not been run against a live hosted instance here; background jobs and rate limiters still assume one long-running server.
+- PostgreSQL in production. Several server instances are supported (advisory locks, shared rate limits, a durable analysis queue); the ingest flood guard and the start-up tick remain per instance. The free Render deployment sleeps when idle and its database expires after 30 days unless upgraded.
 - Live market prices are the IEX Day-Ahead Market's unconstrained clearing price, read from IEX's public snapshot page (IEX documents no public API). They show when power is cheap on India's grid; they are not the plant's tariff. If IEX changes its page, the parser refuses partial data and the last good day stays on screen.
 - Hindi and Marathi text covers navigation, heat entry and sync only, and is an unreviewed draft.
 

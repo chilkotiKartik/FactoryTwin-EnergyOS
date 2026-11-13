@@ -22,7 +22,7 @@ const nextConfig: NextConfig = {
     ];
   },
   // Every screen is per-user and per-factory, so pages render dynamically.
-  serverExternalPackages: ["@libsql/client", "libsql"],
+  serverExternalPackages: ["@electric-sql/pglite", "postgres"],
   poweredByHeader: false,
   experimental: {
     serverActions: { bodySizeLimit: "3mb" },

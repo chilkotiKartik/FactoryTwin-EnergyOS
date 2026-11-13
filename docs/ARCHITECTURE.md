@@ -2,9 +2,9 @@
 
 ## Stack
 
-Next.js 16 (App Router, React 19 server components and server actions) · TypeScript strict · Tailwind CSS v4 · Motion · Recharts and hand-built SVG charts · Drizzle ORM on libSQL/SQLite · Zod validation · Vitest · Playwright.
+Next.js 16 (App Router, React 19 server components and server actions) · TypeScript strict · Tailwind CSS v4 · Motion · Recharts and hand-built SVG charts · Drizzle ORM on PostgreSQL (PGlite locally) · Zod validation · Vitest · Playwright.
 
-SQLite keeps setup to one command and suits a single-site pilot. The schema is plain Drizzle, so moving to PostgreSQL is a driver and migration change, not a redesign.
+PostgreSQL in production; PGlite (the same engine embedded in Node) for local development and tests, so setup stays one command with no database server. Timestamps are epoch milliseconds in `bigint` columns, JSON in `jsonb`. Check-then-write transactions take a per-factory advisory lock (`src/db/lock.ts`), so concurrent tablets and several server instances cannot interleave; the audit chain is sealed under its own lock and ordered by a seal sequence.
 
 ## Layout
 

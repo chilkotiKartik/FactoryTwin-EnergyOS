@@ -29,6 +29,6 @@ export default defineConfig({
         url: `http://localhost:${PORT}/api/health`,
         timeout: 120_000,
         reuseExistingServer: false,
-        env: { DATABASE_URL: "file:./data/e2e.db", DEMO_PASSWORD: "energyos-demo", SEED_DEMO_USERS: "true", COOKIE_SECURE: "false" },
+        env: { DATABASE_URL: "pglite:./data/e2e-pglite", DEMO_PASSWORD: "energyos-demo", SEED_DEMO_USERS: "true", COOKIE_SECURE: "false" },
       },
 });

@@ -230,11 +230,13 @@ describe("persistence", () => {
   it("data survives closing and reopening the database", async () => {
     const a = await t.actor(IDS.supervisorA);
     const before = await rangeSummary(t.db, a, AS_RUN_DATE, AS_RUN_DATE);
-    const { db, client } = createDb(t.url);
-    const n = await db.select({ c: count() }).from(heats).where(eq(heats.factoryId, IDS.facA));
+    // Close the database completely (last test in this file), then open the same directory again.
+    await t.close();
+    const reopened = createDb(t.url);
+    const n = await reopened.db.select({ c: count() }).from(heats).where(eq(heats.factoryId, IDS.facA));
     expect(n[0].c).toBeGreaterThan(300);
-    const r = await db.select({ c: count() }).from(meterReadings).where(and(eq(meterReadings.factoryId, IDS.facA)));
+    const r = await reopened.db.select({ c: count() }).from(meterReadings).where(and(eq(meterReadings.factoryId, IDS.facA)));
     expect(r[0].c).toBeGreaterThanOrEqual(before.readingCount);
-    client.close();
+    await reopened.close();
   });
 });

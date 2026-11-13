@@ -13,6 +13,8 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 import { IngestToken, SettingsForm } from "@/components/settings/settings-form";
+import { ApiKeys } from "@/components/settings/api-keys";
+import { listApiKeys } from "@/server/services/apikeys";
 
 export const metadata: Metadata = { title: "Factory settings" };
 
@@ -21,6 +23,7 @@ export default async function SettingsPage() {
   const db = getDb();
   const [{ factory: f, furnace }, meters, team, recentAlerts] = await Promise.all([getSettings(db, actor), listMeters(db, actor), listTeam(db, actor), listAlerts(db, actor, 8)]);
   const canConfigure = can(actor.role, "factory.configure");
+  const keys = canConfigure ? await listApiKeys(db, actor) : [];
   return (
     <>
       <PageHeader title="Factory settings" crumbs={[{ label: f.name }, { label: "Settings" }]} description="Process parameters used by analysis and the optimiser. Changes are audited and make pending recommendations stale on their next check." />
@@ -84,6 +87,14 @@ export default async function SettingsPage() {
               )}
             </PanelBody>
           </Panel>
+          {canConfigure ? (
+            <Panel>
+              <PanelHeader title="Integration API" subtitle="Read-only keys for ERP, MES or BI tools (Power BI, Excel). A key sees this factory only." />
+              <PanelBody>
+                <ApiKeys keys={keys} timeZone={f.timeZone} />
+              </PanelBody>
+            </Panel>
+          ) : null}
           <Panel>
             <PanelHeader title="Meter connection (read-only)" subtitle="Meters push readings in; EnergyOS never writes to equipment." />
             <PanelBody className="flex flex-col gap-4 text-[13px]">

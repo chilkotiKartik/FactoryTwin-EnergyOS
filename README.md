@@ -23,6 +23,14 @@ EnergyOS is **advisory only**. It never sends a command to a furnace or any othe
 - **Real photographs from India** with their licence credits ([docs/CREDITS.md](docs/CREDITS.md)).
 - **Every screen is smoke-tested** as every role, on a desktop and a phone, in both themes (`tests/e2e/smoke.spec.ts`).
 
+## Live deployment
+
+Render, Singapore: a Node web service plus PostgreSQL, described entirely by [`render.yaml`](render.yaml). See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for Render, any Linux server (systemd + Caddy) and serverless hosts, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is left.
+
+## Integration API
+
+Read-only JSON for ERP, MES and BI tools: `/api/v1/summary`, `/api/v1/heats`, `/api/v1/recommendations` (key from Factory settings → Integration API, `Authorization: Bearer eosk_…`), and the public `/api/v1/market` (today's IEX prices). Machine-readable description: `/api/v1/openapi.json`.
+
 ## Quick start
 
 Requirements: Node.js 20.9+ (tested on 22), pnpm 10.
@@ -30,7 +38,7 @@ Requirements: Node.js 20.9+ (tested on 22), pnpm 10.
 ```bash
 pnpm install
 cp .env.example .env
-pnpm db:setup        # creates ./data/energyos.db and seeds the demo (≈4 s)
+pnpm db:setup        # embedded Postgres in ./data/pglite, migrations, demo seed (no database server needed)
 pnpm dev             # http://localhost:3000
 ```
 
@@ -54,7 +62,7 @@ Sign in with any demo account (password `energyos-demo`, set by `DEMO_PASSWORD`)
 | `pnpm build` / `pnpm start` | Production build and server |
 | `pnpm lint` | ESLint |
 | `pnpm typecheck` | TypeScript, no emit |
-| `pnpm test` | Unit and integration tests (Vitest); each integration file uses its own temporary database |
+| `pnpm test` | Unit and integration tests (Vitest) on an embedded Postgres per file; `TEST_DATABASE_URL=postgres://…` runs them on a real server, including the concurrency tests |
 | `pnpm test:e2e` | Playwright: the demo flow plus a smoke test of every screen × role × phone/desktop, against a production build on port 3100 with `data/e2e.db`. Run `pnpm build` first. If Playwright's own Chromium is not installed, set `PLAYWRIGHT_CHROMIUM_PATH` to a Chromium binary. |
 | `pnpm db:setup` | Apply migrations and seed if empty |
 | `pnpm db:reset` | Recreate the database |
@@ -64,13 +72,14 @@ Sign in with any demo account (password `energyos-demo`, set by `DEMO_PASSWORD`)
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `DATABASE_URL` | `file:./data/energyos.db` | libSQL/SQLite URL |
+| `DATABASE_URL` | `pglite:./data/pglite` | `postgres://…` in production, `pglite:<dir>` for an embedded local Postgres |
 | `SEED_DEMO_USERS` | `true` | Seed demo logins. Set `false` for any shared deployment. |
 | `DEMO_PASSWORD` | `energyos-demo` | Password for seeded demo accounts |
 | `COOKIE_SECURE` | `false` | `true` when served over HTTPS (also enables HSTS) |
 | `ANALYSIS_DEBOUNCE_MS` | `60000` | Delay before re-analysing a factory after new meter data arrives through the ingest API |
 | `ALLOW_PRIVATE_WEBHOOKS` | `false` | Allow alert webhooks to private hosts or plain HTTP (an internal SMS/WhatsApp gateway) |
-| `DATABASE_AUTH_TOKEN` | – | Token for a hosted libSQL / Turso `DATABASE_URL` (ignored for local files) |
+| `DB_POOL_MAX` | `10` | Database connections per server instance |
+| `CRON_SECRET` | – | Enables `POST /api/cron/tick` for an external scheduler |
 | `INDIA_MARKET_FEED` | `iex` | `off` stops reading IEX prices (for a plant network without internet). If the server reaches the internet through a proxy, start Node with `NODE_USE_ENV_PROXY=1` (Node 22.21+). |
 | `ENERGYOS_JOBS` | `true` | `false` turns off the background jobs (audit sealing, meter-offline alerts, session cleanup) |
 

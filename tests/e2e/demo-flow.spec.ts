@@ -9,6 +9,7 @@ async function login(page: Page, email: string) {
   await page.fill("#email", email);
   await page.fill("#password", PASSWORD);
   await Promise.all([page.waitForURL("**/dashboard"), page.click("button[type=submit]")]);
+  await page.waitForLoadState("networkidle");
 }
 
 test.describe.configure({ mode: "serial" });
@@ -67,7 +68,8 @@ test("supervisor approves, records the outcome and saves a verification report",
   await page.getByTestId("confirm-decision").click();
   await expect(page.getByTestId("decision-record")).toContainText("Approved by");
   await page.goto("/verification");
-  await page.getByTestId("record-outcome").click();
+  // While a page streams in, React briefly holds a hidden copy of the content: act on the visible one.
+  await page.getByTestId("record-outcome").filter({ visible: true }).click();
   await page.waitForURL(/comparison=2026-10-21/, { timeout: 60_000 });
   await expect(page.getByText("SEC change (per tonne)")).toBeVisible();
   await page.getByTestId("save-report").click();
@@ -78,6 +80,8 @@ test("supervisor approves, records the outcome and saves a verification report",
 test("CSV import previews errors and stores only valid rows", async ({ page }) => {
   await login(page, "analyst@foundry-a.test");
   await page.goto("/meters");
+  // Interact only once the page is interactive (hydrated); an early change event is lost.
+  await page.waitForLoadState("networkidle");
   await page.setInputFiles("#csv-file", path.resolve("public/samples/meter-sample-with-errors.csv"));
   const preview = page.getByTestId("csv-preview");
   await expect(preview).toBeVisible();

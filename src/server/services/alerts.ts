@@ -29,8 +29,9 @@ export async function raiseAlert(db: DB, factory: Pick<FactoryRow, "id">, a: Ale
   const res = await db
     .insert(alerts)
     .values({ id, factoryId: factory.id, kind: a.kind, dedupeKey: a.key.slice(0, 200), title: a.title.slice(0, 200), body: a.body.slice(0, 2000), href: a.href ?? null })
-    .onConflictDoNothing();
-  if (res.rowsAffected !== 1) return null;
+    .onConflictDoNothing()
+    .returning({ id: alerts.id });
+  if (res.length !== 1) return null;
   void deliverAlert(db, id).catch((e) => console.error("[energyos] alert delivery failed", e));
   return id;
 }

@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import type { DB } from "@/db/client";
+import { lockKey } from "@/db/lock";
 import { approvals, optimizationRuns, productionPlans, recommendations, scheduleItems, scheduleVersions, users } from "@/db/schema";
 import type { Actor } from "../context";
 import { requirePerm } from "../context";
@@ -102,6 +103,8 @@ export async function decideRecommendation(db: DB, actor: Actor, raw: unknown) {
   let staleNow = false;
   try {
     await db.transaction(async (tx) => {
+      // One writer per factory at a time for this check-then-write.
+      await lockKey(tx, actor.factory.id);
       // Freshness is checked inside the write transaction, so no plan, tariff or
       // model change can land between the check and the decision.
       const built = await buildInput(tx as unknown as DB, actor, r.planId);
@@ -112,8 +115,9 @@ export async function decideRecommendation(db: DB, actor: Actor, raw: unknown) {
       const upd = await tx
         .update(recommendations)
         .set({ status: input.decision })
-        .where(and(eq(recommendations.id, r.id), eq(recommendations.status, "PENDING")));
-      if (upd.rowsAffected !== 1) throw conflict("Someone else decided this recommendation first.");
+        .where(and(eq(recommendations.id, r.id), eq(recommendations.status, "PENDING")))
+        .returning({ id: recommendations.id });
+      if (upd.length !== 1) throw conflict("Someone else decided this recommendation first.");
       await tx.insert(approvals).values({
         id: newId("apr"),
         factoryId: actor.factory.id,

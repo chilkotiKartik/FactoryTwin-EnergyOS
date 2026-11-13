@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { DB } from "@/db/client";
+import { lockKey } from "@/db/lock";
 import { optimizationRuns, recommendations, scheduleItems, scheduleVersions } from "@/db/schema";
 import { expectedGoodPracticeKwh } from "@/domain/model";
 import { optimise, type OptimizerInput, type OptimizerResult, type ScheduleEvaluation, type SiteLoad } from "@/domain/optimizer";
@@ -219,6 +220,8 @@ export async function runOptimization(db: DB, actor: Actor, planId: string, opts
   if (dq.completeness !== null && dq.completeness < f.minCompleteness) {
     const message = `Advice paused: meter data for ${refDay} is ${(dq.completeness * 100).toFixed(1)}% complete during operation (${dq.gaps} gap${dq.gaps === 1 ? "" : "s"}); the minimum is ${(f.minCompleteness * 100).toFixed(0)}%. Fix or explain the gap, then re-run.`;
     await db.transaction(async (tx) => {
+      // One writer per factory at a time for this check-then-write.
+      await lockKey(tx, actor.factory.id);
       await tx.insert(optimizationRuns).values({
         id: runId,
         factoryId: f.id,
@@ -245,6 +248,8 @@ export async function runOptimization(db: DB, actor: Actor, planId: string, opts
   let recommendationId: string | null = null;
   let message: string;
   await db.transaction(async (tx) => {
+    // One writer per factory at a time for this check-then-write.
+    await lockKey(tx, actor.factory.id);
     await tx.insert(optimizationRuns).values({
       id: runId,
       factoryId: f.id,
