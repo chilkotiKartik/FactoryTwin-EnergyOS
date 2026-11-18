@@ -25,6 +25,8 @@ EnergyOS is **advisory only**. It never sends a command to a furnace or any othe
 
 ## Live deployment
 
+**https://factorytwin-energyos.onrender.com** — free plan: the first visit after 15 idle minutes takes about 30–50 s to wake. The demo password is shown on the sign-in page; tap an account to fill the form.
+
 Render, Singapore: a Node web service plus PostgreSQL, described entirely by [`render.yaml`](render.yaml). See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for Render, any Linux server (systemd + Caddy) and serverless hosts, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is left.
 
 ## Integration API

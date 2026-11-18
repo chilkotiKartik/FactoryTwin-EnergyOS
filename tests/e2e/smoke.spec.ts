@@ -8,7 +8,7 @@ void _engine;
  * dark. A screen fails if the server errors, the page throws, the console logs an
  * error, the error boundary shows, or the page scrolls sideways.
  */
-const PASSWORD = "energyos-demo";
+const PASSWORD = process.env.E2E_PASSWORD ?? "energyos-demo";
 const ACCOUNTS = ["owner@foundry-a.test", "supervisor@foundry-a.test", "analyst@foundry-a.test", "operator@foundry-a.test", "owner@foundry-b.test"];
 const ROUTES = ["/dashboard", "/why", "/heats", "/meters", "/anomalies", "/optimizer", "/recommendations", "/verification", "/tariffs", "/reports", "/reports/daily", "/audit", "/evidence", "/settings", "/demo", "/account"];
 /** Detail pages are reached by following the first matching link on a list page. */
