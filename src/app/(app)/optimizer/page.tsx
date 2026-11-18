@@ -20,6 +20,7 @@ import { EmptyState } from "@/components/ui/empty";
 import { Table, Td, Th } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { WhatIf } from "@/components/optimizer/what-if";
+import { Replan } from "@/components/optimizer/replan";
 import { PlanEditor } from "@/components/optimizer/plan-editor";
 import { RunOptimizerButton } from "@/components/optimizer/run-button";
 import { CreatePlanForm } from "@/components/optimizer/create-plan";
@@ -215,6 +216,15 @@ export default async function OptimizerPage(props: PageProps<"/optimizer">) {
                 <ScheduleTable current={result.current.items} recommended={result.recommended.items} />
               </Panel>
             </>
+          ) : null}
+
+          {furnaceRow ? (
+            <Panel>
+              <PanelHeader title="Running late? Re-plan the rest of the shift" subtitle="Poured heats stay as they ran; the remaining heats are re-optimised from now with every limit kept. Nothing is saved." />
+              <PanelBody>
+                <Replan planId={plan.id} />
+              </PanelBody>
+            </Panel>
           ) : null}
 
           {furnaceRow ? (

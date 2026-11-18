@@ -2,18 +2,19 @@ import { createHash } from "node:crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { DB } from "@/db/client";
 import { lockKey } from "@/db/lock";
-import { optimizationRuns, recommendations, scheduleItems, scheduleVersions } from "@/db/schema";
+import { heats as heatsTable, optimizationRuns, recommendations, scheduleItems, scheduleVersions } from "@/db/schema";
 import { expectedGoodPracticeKwh } from "@/domain/model";
 import { optimise, type OptimizerInput, type OptimizerResult, type ScheduleEvaluation, type SiteLoad } from "@/domain/optimizer";
 import { minuteRateTable, versionAt } from "@/domain/tariff";
-import { localDayStart } from "@/domain/time";
+import { replan } from "@/domain/replan";
+import { localDate, localDayStart, localMinuteOfDay } from "@/domain/time";
 import type { Actor } from "../context";
 import { requirePerm } from "../context";
 import { audit } from "../audit";
 import { notFound, validation } from "../errors";
 import { newId } from "../ids";
 import { latestModel, loadTariffVersions, requireFurnace } from "./common";
-import { getPlan, referenceDay } from "./plans";
+import { getPlan, minuteOf, referenceDay } from "./plans";
 import { rangeSummary } from "./analytics";
 import { raiseAlert } from "./alerts";
 
@@ -425,5 +426,97 @@ export async function whatIf(db: DB, actor: Actor, planId: string, p: WhatIfPara
     reordered: r.reordered,
     sequence: rec ? rec.items.map((i) => i.label) : [],
     savingPaisePerTonne: rec && rec.totals.tonnesPoured > 0 ? (r.current.totals.costPaise - rec.totals.costPaise) / rec.totals.tonnesPoured : null,
+  };
+}
+
+export interface ReplanParams {
+  /** Local minute to re-plan from. Default: now if the plan is for today, else the furnace's start. */
+  nowMin?: number;
+  /** Plan heat ids already poured. Default: heats recorded today with a tap time. */
+  done?: string[];
+  /** The furnace is busy until this local minute (a heat melting, a repair). */
+  busyUntilMin?: number | null;
+}
+
+export interface ReplanView {
+  label: "MODELLED";
+  nowMin: number;
+  freeFromMin: number;
+  status: "OPTIMAL" | "INFEASIBLE" | "DONE";
+  heats: { id: string; label: string; done: boolean; recordedTapMin: number | null }[];
+  items: { label: string; startMin: number; tapMin: number; holdMin: number; cold: boolean; costPaise: number; moved: boolean }[];
+  current: { costPaise: number; kwh: number; holdMinutes: number; lastTapMin: number | null } | null;
+  recommended: { costPaise: number; kwh: number; holdMinutes: number; lastTapMin: number | null } | null;
+  remainingTonnes: { code: string; tonnes: number }[];
+  blocking: string[];
+  notes: string[];
+}
+
+/**
+ * Re-plan the rest of the shift from now. Heats already poured stay as they ran; only
+ * the remaining heats are re-optimised. Nothing is saved: like the what-if sandbox this
+ * creates no run, recommendation or approval, and every figure is MODELLED.
+ */
+export async function replanShift(db: DB, actor: Actor, planId: string, p: ReplanParams = {}): Promise<ReplanView> {
+  requirePerm(actor, "view");
+  const f = actor.factory;
+  const detail = await getPlan(db, actor, planId);
+  if (!detail) throw notFound("Plan");
+  const built = await buildInput(db, actor, planId);
+  const date = detail.plan.planDate;
+  const recorded = await db
+    .select({ heatNo: heatsTable.heatNo, tapAt: heatsTable.tapAt })
+    .from(heatsTable)
+    .where(and(eq(heatsTable.factoryId, f.id), eq(heatsTable.dayDate, date)));
+  const tapByNo = new Map<string, number>();
+  for (const r of recorded) if (r.tapAt !== null) tapByNo.set(r.heatNo.trim().toLowerCase(), minuteOf(date, r.tapAt, f.timeZone));
+  const recordedTap = (label: string) => tapByNo.get(label.trim().toLowerCase()) ?? null;
+
+  const now = Date.now();
+  const nowMin =
+    clampN(p.nowMin, 0, 1440) ?? (localDate(now, f.timeZone) === date ? localMinuteOfDay(now, f.timeZone) : built.input.furnace.availableFromMin);
+  const ids = new Set(built.input.heats.map((h) => h.key));
+  const doneIds = p.done ? p.done.filter((id) => ids.has(id)) : built.input.heats.filter((h) => recordedTap(h.label) !== null).map((h) => h.key);
+  const notes: string[] = [];
+  const done = doneIds.map((id) => {
+    const h = built.input.heats.find((x) => x.key === id)!;
+    const tap = recordedTap(h.label);
+    return { key: id, tapMin: tap ?? nowMin };
+  });
+  if (done.some((d) => recordedTap(built.input.heats.find((h) => h.key === d.key)!.label) === null))
+    notes.push("Heats marked poured without a recorded tap time are taken as tapped now.");
+  const busy = p.busyUntilMin === null || p.busyUntilMin === undefined ? null : (clampN(p.busyUntilMin, 0, 1440) ?? null);
+  const r = replan(built.input, { nowMin, done, busyUntilMin: busy });
+
+  const dayAhead = await latestRun(db, actor, planId);
+  const plannedStart = new Map<string, number>();
+  const recItems = (dayAhead?.result as { recommended?: { items?: { label: string; startMin: number }[] } } | null)?.recommended?.items ?? [];
+  for (const it of recItems) plannedStart.set(it.label, it.startMin);
+
+  const res = r.result;
+  const rec = res?.recommended ?? null;
+  const pick = (e: ScheduleEvaluation) => ({ costPaise: e.totals.costPaise, kwh: e.totals.kwh, holdMinutes: e.totals.holdMinutes, lastTapMin: e.totals.lastTapMin });
+  return {
+    label: "MODELLED",
+    nowMin,
+    freeFromMin: r.freeFromMin,
+    status: res === null ? "DONE" : res.status,
+    heats: built.input.heats.map((h) => ({ id: h.key, label: h.label, done: doneIds.includes(h.key), recordedTapMin: recordedTap(h.label) })),
+    items: rec
+      ? rec.items.map((it) => ({
+          label: it.label,
+          startMin: it.startMin,
+          tapMin: it.tapMin,
+          holdMin: it.holdMin,
+          cold: it.cold,
+          costPaise: it.costPaise,
+          moved: plannedStart.has(it.label) && plannedStart.get(it.label) !== it.startMin,
+        }))
+      : [],
+    current: res ? pick(res.current) : null,
+    recommended: rec ? pick(rec) : null,
+    remainingTonnes: r.remainingTonnes.filter((o) => o.tonnes > 0).map((o) => ({ code: o.code, tonnes: o.tonnes })),
+    blocking: res ? res.blocking.map((b) => `${b.constraint}: ${b.detail}`) : [],
+    notes: [...r.notes, ...notes],
   };
 }

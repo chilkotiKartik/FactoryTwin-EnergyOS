@@ -96,6 +96,11 @@ export interface OptimizerInput {
   allowReorder?: boolean;
   /** Shared-connection limits. When absent, the furnace is scheduled as if it were alone on the connection. */
   site?: SiteLoad;
+  /**
+   * Tap minute of the last heat already poured today (in-shift re-planning). The first heat
+   * here is then warm if it starts within the cold gap of it. Null/absent = the day starts cold.
+   */
+  priorTapMin?: number | null;
 }
 
 export interface ScheduledHeat {
@@ -254,7 +259,7 @@ function peakBlockKw(base: ArrayLike<number>, furnace: Float64Array): number {
 export function evaluateSchedule(input: OptimizerInput, starts: number[]): ScheduleEvaluation {
   const pre = prefix(input.pricePaise);
   const items: ScheduledHeat[] = [];
-  let prevTap: number | null = null;
+  let prevTap: number | null = input.priorTapMin ?? null;
   const meltByPrice: Record<string, number> = {};
   for (let k = 0; k < input.heats.length; k++) {
     const h = input.heats[k];
@@ -423,9 +428,9 @@ export function evaluateSchedule(input: OptimizerInput, starts: number[]): Sched
 /** Current practice: start at the shift start and recharge immediately after each tap. */
 export function currentPracticeStarts(input: OptimizerInput): number[] {
   const starts: number[] = [];
-  let prevTap: number | null = null;
+  let prevTap: number | null = input.priorTapMin ?? null;
   for (let k = 0; k < input.heats.length; k++) {
-    const S = prevTap === null ? input.currentPracticeStartMin : prevTap + input.process.turnaroundMinutes;
+    const S = k === 0 ? input.currentPracticeStartMin : prevTap! + input.process.turnaroundMinutes;
     const cold = prevTap === null || S - prevTap > input.process.coldGapMinutes;
     const M = S + meltMinutesFor(input, k, cold);
     prevTap = Math.max(M, input.heats[k].mouldReadyMin ?? -Infinity);
@@ -476,11 +481,11 @@ export function earliestSchedule(input: OptimizerInput): { starts: number[] | nu
   const g = input.gridMinutes;
   const starts: number[] = [];
   const reasons: string[] = [];
-  let prevTap: number | null = null;
+  let prevTap: number | null = input.priorTapMin ?? null;
   for (let k = 0; k < input.heats.length; k++) {
     const h = input.heats[k];
-    let S = prevTap === null ? input.furnace.availableFromMin : prevTap + input.process.turnaroundMinutes;
-    let why = prevTap === null ? `availability starts ${fmt(input.furnace.availableFromMin)}` : "previous tap + turnaround";
+    let S = k === 0 ? input.furnace.availableFromMin : prevTap! + input.process.turnaroundMinutes;
+    let why = k === 0 ? `availability starts ${fmt(input.furnace.availableFromMin)}` : "previous tap + turnaround";
     S = Math.ceil(S / g) * g;
     let placed = false;
     for (let guard = 0; guard < 2000 && S <= input.furnace.availableToMin; guard++) {
@@ -547,7 +552,7 @@ function solveDp(input: OptimizerInput, cand: number[][] | null): DpSolution {
     const due = Math.min(orderDue(input, h.orderId), input.deadlineMin);
     const prevStates: { tap: number; cell: Cell | null }[] =
       k === 0
-        ? [{ tap: -1, cell: null }]
+        ? [{ tap: input.priorTapMin ?? -1, cell: null }]
         : layers[k - 1].map((c, tap) => (c ? { tap, cell: c } : null)).filter((x): x is { tap: number; cell: Cell } => x !== null);
     for (const { tap: prevTap, cell } of prevStates) {
       const starts: Iterable<number> = cand
@@ -559,7 +564,7 @@ function solveDp(input: OptimizerInput, cand: number[][] | null): DpSolution {
       for (const S of starts) {
         explored++;
         if (S > toMin) break;
-        const cold = k === 0 || S - prevTap > input.process.coldGapMinutes;
+        const cold = (k === 0 && input.priorTapMin == null) || S - prevTap > input.process.coldGapMinutes;
         const melt = meltMinutesFor(input, k, cold);
         const M = S + melt;
         const tap = Math.max(M, h.mouldReadyMin ?? -Infinity);

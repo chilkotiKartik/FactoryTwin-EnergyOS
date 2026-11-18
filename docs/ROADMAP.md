@@ -6,6 +6,7 @@ Status as of 13 Nov 2026. Everything listed under "Done" is covered by tests (16
 
 - Heat-level energy: meter ↔ heat linking, robust expected-energy model, holding detection, explainable anomalies with evidence levels.
 - Exact schedule optimiser (1-minute refined), opt-in reordering within an order, shared-connection demand cap, what-if sandbox.
+- In-shift re-planning: when a heat runs late, re-optimise the rest of the day from now, keeping poured heats as they ran.
 - Human decision loop: approve/reject, stale detection, outcome recording, per-tonne verification with confidence intervals.
 - Live India data: IEX Day-Ahead Market prices every 30 minutes; sourced research page with a savings calculator.
 - Tablet use: offline heat queue, "Now" buttons, installable app, Hindi and Marathi for navigation and heat entry; light/dark; phone layout.
@@ -32,10 +33,9 @@ Status as of 13 Nov 2026. Everything listed under "Done" is covered by tests (16
 | 6 | Several furnaces per factory, sharing one connection | The demand-cap optimiser exists; the data model is one furnace per factory. Needs furnace-level plans, meters and screens. |
 | 7 | Richer energy model: charge mix, tap temperature, lining age | Fields must first be captured on the heat form. |
 | 8 | Heat reordering by a full solver (MILP / CP-SAT) | Today: bounded local search within an order. |
-| 9 | In-shift re-planning when a heat runs late | The optimiser is day-ahead. |
-| 10 | Solar / battery on site | Would add a generation profile to the shared-connection model. |
-| 11 | Daily rollups and raw-data retention | Not needed yet (measured: 16–131 ms at 124 days); revisit beyond about a year of one-minute data or several sites. |
-| 12 | SSO (Google / Microsoft) for owners | Accounts are email + password today. |
+| 9 | Solar / battery on site | Would add a generation profile to the shared-connection model. |
+| 10 | Daily rollups and raw-data retention | Not needed yet (measured: 16–131 ms at 124 days); revisit beyond about a year of one-minute data or several sites. |
+| 11 | SSO (Google / Microsoft) for owners | Accounts are email + password today. |
 
 ## Not planned
 

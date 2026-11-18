@@ -19,7 +19,7 @@ import { createHeat, updateHeat } from "@/server/services/heats";
 import { commitCsv, previewCsv, type CsvPreview, type DeclaredSource } from "@/server/services/meters";
 import { createTariffVersion, previewRate } from "@/server/services/tariffs";
 import { createPlan, updatePlan } from "@/server/services/plans";
-import { runOptimization, whatIf, type RunOutcome, type WhatIfParams, type WhatIfResult } from "@/server/services/optimization";
+import { replanShift, runOptimization, whatIf, type ReplanParams, type ReplanView, type RunOutcome, type WhatIfParams, type WhatIfResult } from "@/server/services/optimization";
 import { decideRecommendation } from "@/server/services/recommendations";
 import { recordSimulatedOutcome } from "@/server/services/execution";
 import { createVerificationReport } from "@/server/services/verification";
@@ -167,6 +167,10 @@ export async function createPlanAction(input: unknown) {
 
 export async function whatIfAction(planId: string, params: WhatIfParams): Promise<ActionResult<WhatIfResult>> {
   return withActor((db, a) => whatIf(db, a, planId, params), { readOnly: true });
+}
+
+export async function replanAction(planId: string, params: ReplanParams): Promise<ActionResult<ReplanView>> {
+  return withActor((db, a) => replanShift(db, a, planId, params), { readOnly: true });
 }
 
 export async function runOptimizationAction(planId: string, opts: { allowReorder?: boolean } = {}): Promise<ActionResult<RunOutcome>> {
