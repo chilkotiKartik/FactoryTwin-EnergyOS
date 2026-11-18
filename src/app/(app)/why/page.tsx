@@ -217,11 +217,11 @@ export default async function WhyPage() {
           <PanelBody className="space-y-2 text-[13.5px] leading-relaxed text-ink-2">
             <p>No field trial yet: every number in the demo factory is synthetic and labelled so.</p>
             <p>
-              The grid factor {f.emissionFactor} kg CO₂/kWh comes from an earlier CEA database version; CEA published{" "}
+              Grid emissions use {f.emissionFactor} kg CO₂/kWh ({f.emissionFactorSource}). The current all-India figure is 0.675 for FY 2025-26 in{" "}
               <a className="font-medium text-blue hover:underline" href="https://cea.nic.in/wp-content/uploads/baseline/2026/09/User_Guide__Version_22.0.pdf" target="_blank" rel="noopener noreferrer">
-                Version 22.0
+                CEA&apos;s CO₂ Baseline Database v22.0
               </a>{" "}
-              (Aug 2026). Update it in Factory settings before quoting avoided CO₂.
+              (Aug 2026); the deck used 0.727 (FY 2023-24).
             </p>
             <p>Hindi and Marathi text is a first draft that needs review by a native speaker from the plant.</p>
           </PanelBody>

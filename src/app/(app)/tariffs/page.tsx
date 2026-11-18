@@ -117,6 +117,7 @@ export default async function TariffsPage() {
               <PanelBody>
                 <TariffForm
                   defaultEffective={`${tomorrow}T00:00`}
+                  powerFactor={actor.factory.powerFactor}
                   initial={{
                     name: latest ? `${latest.name.replace(/ \(rev \d+\)$/, "")} (rev ${latest.version + 1})` : "Industrial ToD tariff",
                     normalRate: latest ? latest.normalRatePaise / 100 : 8,

@@ -10,6 +10,7 @@ Status as of 13 Nov 2026. Everything listed under "Done" is covered by tests (16
 - Live India data: IEX Day-Ahead Market prices every 30 minutes; sourced research page with a savings calculator.
 - Tablet use: offline heat queue, "Now" buttons, installable app, Hindi and Marathi for navigation and heat entry; light/dark; phone layout.
 - Trust: tamper-evident audit chain, evidence labels on every figure, advisory-only (no write path to equipment).
+- Reference data: CEA v22.0 grid factor (0.675, FY 2025-26); MSEDCL HT I(A) FY 2026-27 tariff preset from the MERC order.
 - Platform: PostgreSQL with advisory locks, shared rate limits and a durable job queue (safe on several instances); read-only Integration API with keys and OpenAPI; cron tick for sleeping/serverless hosts; Render Blueprint deployment.
 
 ## Next — needed for a real pilot (weeks)
@@ -17,8 +18,7 @@ Status as of 13 Nov 2026. Everything listed under "Done" is covered by tests (16
 | # | Item | Why it matters | Needs |
 |---|---|---|---|
 | 1 | **Real meter connection**: a small edge gateway (Modbus TCP/RTU, MQTT) that reads the plant's energy meter and pushes to `/api/ingest`, buffering offline | Today data arrives by CSV or a self-built push; a pilot needs it hands-free | A meter model and gateway hardware from the plant (for example Schneider EM6400 / PM5xxx, Secure Elite) |
-| 2 | **The plant's real tariff order** entered and marked VERIFIED | Every rupee figure depends on it | The DISCOM tariff order the plant is billed under |
-| 3 | **Update the grid emission factor** to CEA CO₂ Baseline Database v22.0 | Avoided-CO₂ claims must use the current version | Reading the v22 user guide |
+| 2 | **The plant's own tariff** confirmed against a real bill | MSEDCL HT I(A) FY 2026-27 is built in as a preset (Maharashtra); other states need their own order | The plant's bill and, outside Maharashtra, its DISCOM order |
 | 4 | **Native-speaker review** of Hindi and Marathi, then translate the remaining screens | Operators should not need English | A reviewer from the plant |
 | 5 | **Paid hosting** (Render Starter + Basic database, about US$13/month) | The free tier sleeps and the free database expires on 13 Dec 2026 | A decision and a card on the Render account |
 | 6 | **Email or WhatsApp alerts** through the existing signed webhook | Supervisors live on their phones | A gateway account (for example WhatsApp Business API) |

@@ -50,6 +50,20 @@ The Electricity (Rights of Consumers) Amendment Rules, 2023 ([PIB](https://pib.g
 
 On the day this page was written, the IEX Day-Ahead Market cleared at an average of ₹5.16/kWh across 96 blocks; the cheapest four hours were 10:15–14:15 at ₹1.17/kWh and the dearest 17:00–21:00 at ₹10.00/kWh (the price ceiling) — an ₹8.83/kWh spread between solar noon and the evening peak. The page's own published average (₹5,158.67/MWh) matches what EnergyOS computes from the 96 blocks. Source: [IEX DAM market snapshot](https://www.iexindia.com/market-data/day-ahead-market/market-snapshot). The app now shows this curve live every day.
 
+### The tariff a Maharashtra foundry actually pays (FY 2026-27)
+
+MERC Order, Case No. 75 of 2025, post-remand, 25 March 2026 ([MSEDCL](https://www.mahadiscom.in/wp-content/uploads/2026/07/Tariff-Order_Case-No.-75-of-2025-dated-25th-March-2026.pdf)), read from the PDF:
+
+| HT I(A) Industry | Value | Where |
+|---|---|---|
+| Energy charge + wheeling | ₹8.44 + ₹0.81 = ₹9.25 per kVAh | Summary of HT Tariff FY 2026-27, p.99 |
+| Demand charge | ₹650 per kVA per month | p.99 |
+| Solar hours 09:00–17:00 | −15 % of energy charge (Apr–Sep), −25 % (Oct–Mar) | Table 8, pp.75–76 |
+| Peak 17:00–24:00 | +20 % of energy charge | Table 8 |
+| Night rebate | removed by this order | ¶18.13–18.14 |
+
+So in winter a kVAh costs ₹7.14 at noon and ₹10.94 in the evening — 53 % more for the same melt. The app ships this as a preset (converted to ₹/kWh at the site's power factor) and gives it to the Pune demo factory.
+
 ## 5. Emissions
 
 - India's grid weighted-average emission factor for FY 2023-24 is commonly cited as 0.727 tCO₂/MWh (renewable-adjusted). ([Saur Energy on the CEA database](https://www.saurenergy.com/solar-energy-news/ceas-co2-baseline-database-impact-of-re-on-indian-grid-emissions-intensity))

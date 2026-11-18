@@ -7,10 +7,11 @@ import { toast } from "sonner";
 import { createTariffAction, previewRateAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/field";
+import { msedclHt1aFy27 } from "@/domain/tariff-presets";
 
 type P = { kind: "PEAK" | "SOLAR" | "OFFPEAK"; label: string; start: string; end: string; rate: string };
 
-export function TariffForm({ initial, defaultEffective }: { initial: { name: string; normalRate: number; periods: P[] }; defaultEffective: string }) {
+export function TariffForm({ initial, defaultEffective, powerFactor }: { initial: { name: string; normalRate: number; periods: P[] }; defaultEffective: string; powerFactor: number }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [name, setName] = useState(initial.name);
@@ -19,6 +20,17 @@ export function TariffForm({ initial, defaultEffective }: { initial: { name: str
   const [evidence, setEvidence] = useState<"ASSUMPTION" | "VERIFIED">("ASSUMPTION");
   const [source, setSource] = useState("");
   const [periods, setPeriods] = useState<P[]>(initial.periods);
+  const presets = msedclHt1aFy27(powerFactor);
+  const loadPreset = (id: string) => {
+    const p = presets.find((x) => x.id === id);
+    if (!p) return;
+    setName(p.name);
+    setEff(p.effectiveFrom);
+    setNormal(String(p.normalRate));
+    setEvidence("VERIFIED");
+    setSource(p.sourceNote);
+    setPeriods(p.periods.map((w) => ({ ...w, rate: String(w.rate) })));
+  };
   const upd = (i: number, k: keyof P, v: string) => setPeriods(periods.map((p, j) => (j === i ? { ...p, [k]: v } : p)));
 
   return (
@@ -34,6 +46,18 @@ export function TariffForm({ initial, defaultEffective }: { initial: { name: str
         });
       }}
     >
+      <label className="flex flex-col gap-1 text-[12px] font-medium text-ink-2">
+        Start from an official tariff order (optional)
+        <Select defaultValue="" onChange={(e) => loadPreset(e.target.value)}>
+          <option value="">— Fill in by hand —</option>
+          {presets.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </Select>
+        <span className="font-normal text-ink-3">MERC Case 75 of 2025 (25 Mar 2026). Billed per kVAh; converted to ₹/kWh at this factory&apos;s power factor ({powerFactor}). Check against your own bill.</span>
+      </label>
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="flex flex-col gap-1 text-[12px] font-medium text-ink-2 sm:col-span-1">
           Name
