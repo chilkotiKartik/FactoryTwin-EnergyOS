@@ -1,0 +1,8 @@
+{
+  "url": "https://factorytwin-energyos.onrender.com/api/ingest",
+  "token": "eos_paste_the_meter_token_from_factory_settings",
+  "meter": { "host": "192.168.1.50", "port": 502, "unitId": 1, "intervalSeconds": 60, "utcOffset": "+05:30" },
+  "power": { "function": 3, "address": 0, "type": "float32", "wordOrder": "ABCD", "scale": 1 },
+  "energy": { "function": 3, "address": 2, "type": "float32", "wordOrder": "ABCD", "scale": 1 },
+  "bufferFile": "gateway-buffer.jsonl"
+}

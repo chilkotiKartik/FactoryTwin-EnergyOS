@@ -126,6 +126,13 @@ Content-Type: application/json
   "power_kw":512.4,"energy_kwh":8.54}]}`}</pre>
                 <p className="mt-1 text-ink-3">Readings must carry a time-zone offset and align to the meter interval. The workspace shows LIVE only while measured readings keep arriving.</p>
               </div>
+              <div>
+                <p className="mb-1 font-medium">Modbus meter?</p>
+                <p className="text-ink-3">
+                  Run the meter gateway on a PC or Raspberry Pi on the plant network: it reads the meter over Modbus TCP every minute (read-only), keeps readings in a local file while the
+                  internet is down, and sends the cumulative kWh counter so no energy is lost. Setup: <span className="font-mono">gateway/README.md</span> in the repository.
+                </p>
+              </div>
             </PanelBody>
           </Panel>
         </div>

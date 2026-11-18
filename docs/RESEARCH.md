@@ -67,7 +67,7 @@ So in winter a kVAh costs ₹7.14 at noon and ₹10.94 in the evening — 53 % m
 ## 5. Emissions
 
 - India's grid weighted-average emission factor for FY 2023-24 is commonly cited as 0.727 tCO₂/MWh (renewable-adjusted). ([Saur Energy on the CEA database](https://www.saurenergy.com/solar-energy-news/ceas-co2-baseline-database-impact-of-re-on-indian-grid-emissions-intensity))
-- CEA has since published **Version 22.0** of the CO₂ Baseline Database (August 2026) with FY 2025-26 data. ([CEA user guide v22.0](https://cea.nic.in/wp-content/uploads/baseline/2026/09/User_Guide__Version_22.0.pdf)) The app's default still uses 0.727 and says so; an owner should update it in Factory settings from the latest version before quoting avoided CO₂.
+- CEA has since published **Version 22.0** of the CO₂ Baseline Database (August 2026). For FY 2025-26 the all-India weighted average including renewables is **0.675 tCO₂/MWh** (Table S: 1,189.04 Mt ÷ 1,761.28 BU). ([CEA user guide v22.0](https://cea.nic.in/wp-content/uploads/baseline/2026/09/User_Guide__Version_22.0.pdf)) This is the app's default; factories still on the old 0.727 default were moved to it by a migration.
 
 ## 6. What this means for the product (design decisions)
 
