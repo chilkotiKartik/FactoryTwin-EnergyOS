@@ -8,6 +8,7 @@ import { requirePerm } from "../context";
 import { audit } from "../audit";
 import { validation } from "../errors";
 import { newId } from "../ids";
+import { isPrivateAddress, postPinned } from "../safe-http";
 
 type FactoryRow = typeof factories.$inferSelect;
 
@@ -36,8 +37,6 @@ export async function raiseAlert(db: DB, factory: Pick<FactoryRow, "id">, a: Ale
   return id;
 }
 
-const PRIVATE_V4 = [/^10\./, /^127\./, /^169\.254\./, /^192\.168\./, /^172\.(1[6-9]|2\d|3[01])\./, /^0\./, /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./];
-
 /** Webhook URLs must be HTTPS to a public host (override with ALLOW_PRIVATE_WEBHOOKS=true for an internal gateway). */
 export function checkWebhookUrl(raw: string): string {
   let u: URL;
@@ -55,8 +54,7 @@ export function checkWebhookUrl(raw: string): string {
     host.endsWith(".localhost") ||
     host.endsWith(".internal") ||
     host.endsWith(".local") ||
-    (isIP(host) === 4 && PRIVATE_V4.some((r) => r.test(host))) ||
-    (isIP(host) === 6 && (host === "::1" || host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe80") || host.startsWith("::ffff:")));
+    (isIP(host) !== 0 && isPrivateAddress(host));
   if (isPrivate && !allowPrivate) throw validation("The webhook must point to a public host.");
   return u.toString();
 }
@@ -83,14 +81,15 @@ export async function deliverAlert(db: DB, alertId: string) {
   let error: string | null = null;
   try {
     const url = checkWebhookUrl(f.alertWebhookUrl);
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-energyos-timestamp": ts, "x-energyos-signature": signPayload(f.alertWebhookSecret, ts, body) },
+    // Resolved once, checked, and pinned: a DNS answer cannot change between check and connect.
+    const res = await postPinned(
+      url,
+      { "content-type": "application/json", "x-energyos-timestamp": ts, "x-energyos-signature": signPayload(f.alertWebhookSecret, ts, body) },
       body,
-      redirect: "error",
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!res.ok) error = `HTTP ${res.status}`;
+      { allowPrivate: process.env.ALLOW_PRIVATE_WEBHOOKS === "true", timeoutMs: 5000 },
+    );
+    if (res.status >= 300 && res.status < 400) error = `HTTP ${res.status} (redirects are not followed)`;
+    else if (res.status < 200 || res.status >= 300) error = `HTTP ${res.status}`;
   } catch (e) {
     error = e instanceof Error ? e.message.slice(0, 200) : "Delivery failed";
   }
