@@ -7,7 +7,8 @@ import { listMeters } from "@/server/services/meters";
 import { listTeam } from "@/server/services/team";
 import { listAlerts } from "@/server/services/alerts";
 import { TeamPanel } from "@/components/team/team-panel";
-import { WebhookForm } from "@/components/alerts/alerts-panel";
+import { EmailAlertsForm, WebhookForm } from "@/components/alerts/alerts-panel";
+import { mailEnabled } from "@/server/mail";
 import { localTime } from "@/lib/format";
 import { PageHeader } from "@/components/ui/page-header";
 import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
@@ -66,9 +67,10 @@ export default async function SettingsPage() {
             </PanelBody>
           </Panel>
           <Panel>
-            <PanelHeader title="Alerts" subtitle="High anomalies, pending approvals, paused advice and offline meters. Sent as signed JSON to your webhook (for example a WhatsApp or SMS gateway)." />
+            <PanelHeader title="Alerts" subtitle="High anomalies, pending approvals, paused advice and offline meters. Sent by email, and as signed JSON to your webhook (for example a WhatsApp or SMS gateway)." />
             <PanelBody className="flex flex-col gap-3 text-[13px]">
-              <WebhookForm current={f.alertWebhookUrl} canEdit={canConfigure} />
+              <EmailAlertsForm current={f.alertEmails} canEdit={canConfigure} enabled={mailEnabled()} />
+              <WebhookForm current={f.alertWebhookUrl} canEdit={canConfigure} canTest={Boolean(f.alertEmails && mailEnabled())} />
               {recentAlerts.length ? (
                 <ul className="flex flex-col gap-1.5 border-t border-line pt-3">
                   {recentAlerts.map((x) => (
@@ -76,8 +78,8 @@ export default async function SettingsPage() {
                       <span className="min-w-0">
                         <span className="font-medium">{x.title}</span> <span className="text-ink-3">{localTime(x.createdAt, f.timeZone, true)}</span>
                       </span>
-                      <Badge tone={x.deliveredAt ? "teal" : x.deliveryError ? "red" : "neutral"} title={x.deliveryError ?? undefined}>
-                        {x.deliveredAt ? "sent" : x.deliveryError ? "failed" : "in app"}
+                      <Badge tone={x.deliveredAt || x.emailedAt ? "teal" : x.deliveryError || x.emailError ? "red" : "neutral"} title={[x.deliveryError, x.emailError].filter(Boolean).join("; ") || undefined}>
+                        {x.deliveredAt || x.emailedAt ? "sent" : x.deliveryError || x.emailError ? "failed" : "in app"}
                       </Badge>
                     </li>
                   ))}

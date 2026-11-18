@@ -10,6 +10,7 @@ Status as of 13 Nov 2026. Everything listed under "Done" is covered by tests (16
 - Human decision loop: approve/reject, stale detection, outcome recording, per-tonne verification with confidence intervals.
 - Live India data: IEX Day-Ahead Market prices every 30 minutes; sourced research page with a savings calculator.
 - Tablet use: offline heat queue, "Now" buttons, installable app, Hindi and Marathi for navigation and heat entry; light/dark; phone layout.
+- Alerts by email (any SMTP provider) and signed webhook.
 - Trust: tamper-evident audit chain, evidence labels on every figure, advisory-only (no write path to equipment).
 - Reference data: CEA v22.0 grid factor (0.675, FY 2025-26); MSEDCL HT I(A) FY 2026-27 tariff preset from the MERC order.
 - Meter gateway (`gateway/`): reads Modbus TCP energy meters, buffers offline, pushes counter readings.
@@ -24,7 +25,7 @@ Status as of 13 Nov 2026. Everything listed under "Done" is covered by tests (16
 | 2 | **The plant's own tariff** confirmed against a real bill | MSEDCL HT I(A) FY 2026-27 is built in as a preset (Maharashtra); other states need their own order | The plant's bill and, outside Maharashtra, its DISCOM order |
 | 3 | **Native-speaker review** of Hindi and Marathi, then translate the remaining screens | Operators should not need English | A reviewer from the plant |
 | 4 | **Paid hosting** (Render Starter + Basic database, about US$13/month) | The free tier sleeps and the free database expires on 13 Dec 2026 | A decision and a card on the Render account |
-| 5 | **Email or WhatsApp alerts** through the existing signed webhook | Supervisors live on their phones | A gateway account (for example WhatsApp Business API) |
+| 5 | **Turn on email alerts; add WhatsApp** | Email is built (SMTP) and tested; WhatsApp goes through the signed webhook | An SMTP account (set `SMTP_URL`); a WhatsApp Business API account |
 
 ## Then — scale (months)
 

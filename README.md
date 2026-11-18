@@ -80,6 +80,7 @@ Sign in with any demo account (password `energyos-demo`, set by `DEMO_PASSWORD`)
 | `COOKIE_SECURE` | `false` | `true` when served over HTTPS (also enables HSTS) |
 | `ANALYSIS_DEBOUNCE_MS` | `60000` | Delay before re-analysing a factory after new meter data arrives through the ingest API |
 | `ALLOW_PRIVATE_WEBHOOKS` | `false` | Allow alert webhooks to private hosts or plain HTTP (an internal SMS/WhatsApp gateway) |
+| `SMTP_URL` / `ALERT_EMAIL_FROM` / `APP_URL` | – | Email alerts over SMTP (off when `SMTP_URL` is unset); see docs/DEPLOYMENT.md |
 | `DB_POOL_MAX` | `10` | Database connections per server instance |
 | `CRON_SECRET` | – | Enables `POST /api/cron/tick` for an external scheduler |
 | `INDIA_MARKET_FEED` | `iex` | `off` stops reading IEX prices (for a plant network without internet). If the server reaches the internet through a proxy, start Node with `NODE_USE_ENV_PROXY=1` (Node 22.21+). |
@@ -91,15 +92,15 @@ No secret is ever sent to the browser. Sessions are random opaque tokens stored 
 
 ## Screens
 
-Dashboard (decision loop, KPIs with definitions, power trace with tariff windows, SEC by heat, trends) · Heat log (filters, tablet quick entry with “Now” buttons, offline queue, edit with revision check) · Heat detail (expected vs actual, trace, findings, evidence level) · Meter data (quality, gaps, unlinked energy, CSV preview → commit, readings) · Anomalies · Schedule optimiser (plan inputs, Gantt current vs recommended, constraint checks, infeasibility explanation, run history, optional reordering of heats within an order, shared-connection demand cap with peak kVA, and a what-if panel that saves nothing) · Approvals · Verification (baseline vs comparison per tonne, payback, avoided CO₂, printable reports) · Tariffs (versioned) · Reports & exports (CSV with metadata, printable daily report) · Audit log · Evidence & assumptions · Factory settings (process parameters, team, meter ingest token) · Scenario control.
+Dashboard (decision loop, KPIs with definitions, power trace with tariff windows, SEC by heat, trends) · Heat log (filters, tablet quick entry with “Now” buttons, offline queue, edit with revision check) · Heat detail (expected vs actual, trace, findings, evidence level) · Meter data (quality, gaps, unlinked energy, CSV preview → commit, readings) · Anomalies · Schedule optimiser (plan inputs, Gantt current vs recommended, constraint checks, infeasibility explanation, run history, optional reordering of heats within an order, shared-connection demand cap with peak kVA, a what-if panel that saves nothing, and in-shift re-planning of the remaining heats when the shift runs late) · Approvals · Verification (baseline vs comparison per tonne, payback, avoided CO₂, printable reports) · Tariffs (versioned) · Reports & exports (CSV with metadata, printable daily report) · Audit log · Evidence & assumptions · Factory settings (process parameters, team, meter ingest token, alert email and webhook) · Scenario control.
 
 ## API
 
 - `GET /api/health` — database check.
 - `GET /api/export/{heats|readings|anomalies|recommendations|audit}?from=YYYY-MM-DD&to=YYYY-MM-DD` — CSV for the signed-in user's active factory (max 31 days).
-- `POST /api/ingest` — read-only meter intake. `Authorization: Bearer eos_…` (issued in Factory settings), body `{"readings":[{"timestamp":"2026-10-22T09:00:00+05:30","power_kw":512.4,"energy_kwh":8.54}]}`. Meters that only expose a cumulative register can send `"energy_kwh_total"` instead; interval energy is the difference to the next interval, and a counter that goes backwards (reset, rollover) is detected. Timestamps up to 5 s off the interval grid are snapped (clock drift). Stored as MEASURED. Refused for simulation factories. Max 512 KB, 120 requests/min per token.
+- `POST /api/ingest` — read-only meter intake. `Authorization: Bearer eos_…` (issued in Factory settings), body `{"readings":[{"timestamp":"2026-10-22T09:00:00+05:30","power_kw":512.4,"energy_kwh":8.54}]}`. Meters that only expose a cumulative register can send `"energy_kwh_total"` instead; interval energy is the difference to the next interval, and a counter that goes backwards (reset, rollover) is detected. Timestamps up to 5 s off the interval grid are snapped (clock drift). Stored as MEASURED. Refused for simulation factories. Max 512 KB, 120 requests/min per token. For a Modbus TCP meter, `gateway/` is a ready-made pusher with an offline buffer (see `gateway/README.md`).
 
-Alerts (new high anomaly, recommendation awaiting a decision, advice paused, meter offline, energy drift) appear in Settings and are POSTed as JSON to the factory's webhook with `X-EnergyOS-Timestamp` and `X-EnergyOS-Signature: sha256=HMAC(secret, "timestamp.body")`.
+Alerts (new high anomaly, recommendation awaiting a decision, advice paused, meter offline, energy drift) appear in Settings, are emailed to up to five addresses when SMTP is configured, and are POSTed as JSON to the factory's webhook with `X-EnergyOS-Timestamp` and `X-EnergyOS-Signature: sha256=HMAC(secret, "timestamp.body")`.
 
 ## Tablet use, offline and languages
 

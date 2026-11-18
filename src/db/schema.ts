@@ -83,6 +83,8 @@ export const factories = pgTable("factories", {
   /** Outbound alert webhook (HTTPS). Payloads are signed with HMAC-SHA256 using alertWebhookSecret. */
   alertWebhookUrl: text("alert_webhook_url"),
   alertWebhookSecret: text("alert_webhook_secret"),
+  /** Comma-separated email addresses that receive alerts (sent only when the server has SMTP configured). */
+  alertEmails: text("alert_emails"),
   createdAt: createdAt(),
 });
 
@@ -619,6 +621,8 @@ export const alerts = pgTable(
     href: text("href"),
     deliveredAt: bigint("delivered_at", { mode: "number" }),
     deliveryError: text("delivery_error"),
+    emailedAt: bigint("emailed_at", { mode: "number" }),
+    emailError: text("email_error"),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("alerts_factory_key_uq").on(t.factoryId, t.dedupeKey), index("alerts_factory_time_idx").on(t.factoryId, t.createdAt)],

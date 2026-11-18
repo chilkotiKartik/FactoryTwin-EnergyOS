@@ -43,3 +43,10 @@ services:
         value: iex
       - key: ANALYSIS_DEBOUNCE_MS
         value: "60000"
+      - key: APP_URL
+        value: https://factorytwin-energyos.onrender.com
+      # Email alerts: set these in the Render dashboard (not in this file) to turn them on.
+      - key: SMTP_URL
+        sync: false
+      - key: ALERT_EMAIL_FROM
+        sync: false

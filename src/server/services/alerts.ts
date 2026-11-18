@@ -9,6 +9,7 @@ import { audit } from "../audit";
 import { validation } from "../errors";
 import { newId } from "../ids";
 import { isPrivateAddress, postPinned } from "../safe-http";
+import { mailEnabled, parseRecipients, sendAlertMail } from "../mail";
 
 type FactoryRow = typeof factories.$inferSelect;
 
@@ -67,7 +68,14 @@ export async function deliverAlert(db: DB, alertId: string) {
   const a = await db.query.alerts.findFirst({ where: eq(alerts.id, alertId) });
   if (!a) return;
   const f = await db.query.factories.findFirst({ where: eq(factories.id, a.factoryId) });
-  if (!f?.alertWebhookUrl || !f.alertWebhookSecret) return;
+  if (!f) return;
+  await Promise.all([deliverWebhook(db, a, f), deliverEmail(db, a, f)]);
+}
+
+type AlertRow = typeof alerts.$inferSelect;
+
+async function deliverWebhook(db: DB, a: AlertRow, f: FactoryRow) {
+  if (!f.alertWebhookUrl || !f.alertWebhookSecret) return;
   const body = JSON.stringify({
     id: a.id,
     kind: a.kind,
@@ -94,6 +102,33 @@ export async function deliverAlert(db: DB, alertId: string) {
     error = e instanceof Error ? e.message.slice(0, 200) : "Delivery failed";
   }
   await db.update(alerts).set(error ? { deliveryError: error } : { deliveredAt: Date.now(), deliveryError: null }).where(eq(alerts.id, a.id));
+}
+
+async function deliverEmail(db: DB, a: AlertRow, f: FactoryRow) {
+  if (!f.alertEmails || !mailEnabled()) return;
+  let error: string | null = null;
+  try {
+    const to = parseRecipients(f.alertEmails);
+    if (to.length === 0) return;
+    await sendAlertMail({ to, subject: `${f.isSimulation ? "[demo] " : ""}${a.title} · ${f.name}`, text: a.body, path: a.href });
+  } catch (e) {
+    error = e instanceof Error ? e.message.slice(0, 200) : "Email failed";
+  }
+  await db.update(alerts).set(error ? { emailError: error } : { emailedAt: Date.now(), emailError: null }).where(eq(alerts.id, a.id));
+}
+
+/** Set or clear the alert email recipients (owner). */
+export async function setAlertEmails(db: DB, actor: Actor, raw: string | null): Promise<{ recipients: string[] }> {
+  requirePerm(actor, "factory.configure");
+  let list: string[] = [];
+  try {
+    list = raw && raw.trim() ? parseRecipients(raw) : [];
+  } catch (e) {
+    throw validation((e as Error).message);
+  }
+  await db.update(factories).set({ alertEmails: list.length ? list.join(", ") : null }).where(eq(factories.id, actor.factory.id));
+  await audit(db, actor, list.length ? "alerts.email_set" : "alerts.email_clear", "factory", actor.factory.id, { count: list.length });
+  return { recipients: list };
 }
 
 export async function listAlerts(db: DB, actor: Actor, limit = 20) {

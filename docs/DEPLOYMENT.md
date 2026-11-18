@@ -102,6 +102,10 @@ The app runs on serverless platforms with two settings: `DATABASE_URL` pointing 
 | `INDIA_MARKET_FEED` | `iex` | `off` for a plant network without internet. Behind an outbound proxy, start Node with `NODE_USE_ENV_PROXY=1`. |
 | `ANALYSIS_DEBOUNCE_MS` | `60000` | Delay before re-analysing after meter data arrives |
 | `ALLOW_PRIVATE_WEBHOOKS` | `false` | Allow alert webhooks to private hosts (an internal SMS/WhatsApp gateway) |
+| `SMTP_URL` | – | Turns on email alerts. `smtps://user:pass@host:465` (TLS) or `smtp://user:pass@host:587` (STARTTLS is required). URL-encode special characters in the password. |
+| `ALERT_EMAIL_FROM` | `EnergyOS <alerts@localhost>` | Sender. Must be an address your mail provider lets you send from. |
+| `APP_URL` | – | Public address of the app, used for links in emails |
+| `SMTP_ALLOW_INSECURE` | `false` | Plain SMTP without TLS, for a relay on the same machine only |
 
 ## 6. Running more than one instance
 
@@ -120,7 +124,8 @@ Still per instance: the ingest flood guard (an in-memory first line of defence b
 - **Logs**: Render Dashboard → service → Logs; on a VM, `journalctl -u energyos -f`.
 - **Backups**: `pg_dump "$DATABASE_URL" -Fc -f energyos-$(date +%F).dump`; restore with `pg_restore -d "$DATABASE_URL" --clean energyos-….dump`. Paid Render databases also take daily snapshots.
 - **Schema changes**: edit `src/db/schema.ts`, run `pnpm db:generate`, commit the migration. It is applied on the next start.
-- **Meter connection**: Factory settings → issue an ingest token → configure the gateway to `POST /api/ingest`.
+- **Meter connection**: Factory settings → issue an ingest token → run the meter gateway (`gateway/README.md`) on a PC or Raspberry Pi on the plant network. It reads a Modbus TCP meter, buffers offline and pushes to `POST /api/ingest`.
+- **Email alerts**: set `SMTP_URL`, `ALERT_EMAIL_FROM` and `APP_URL` (any SMTP provider: Amazon SES, Brevo, Mailgun, Zoho, Google Workspace). Then the owner enters up to five addresses under Factory settings → Alerts and presses "Send test alert". Some hosts block the usual SMTP ports on free plans; most providers also listen on port 2525 (`smtp://…:2525`).
 - **Integrations**: Factory settings → Integration API → create a read-only key; endpoints are described at `/api/v1/openapi.json`.
 
 ## 8. Capacity

@@ -15,6 +15,13 @@
       "when": 1795021557251,
       "tag": "0001_odd_victor_mancha",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795022529006,
+      "tag": "0002_curved_changeling",
+      "breakpoints": true
     }
   ]
 }

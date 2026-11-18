@@ -11,7 +11,7 @@ import { AppError, toActionError, type ActionResult } from "@/server/errors";
 import { requirePerm, type Actor } from "@/server/context";
 import { currentActor, currentSessionId, endSession, setActiveFactory, startSession } from "@/server/auth/session-next";
 import { addMember, changeOwnPassword, changeRole, removeMember, resetPassword, setDisabled, signOutEverywhere } from "@/server/services/team";
-import { sendTestAlert, setAlertWebhook } from "@/server/services/alerts";
+import { sendTestAlert, setAlertEmails, setAlertWebhook } from "@/server/services/alerts";
 import { hashPassword, hashToken, newToken, verifyPassword } from "@/server/auth/password";
 import { audit, verifyAuditChain } from "@/server/audit";
 import { runAnalysis } from "@/server/services/analysis";
@@ -262,10 +262,17 @@ export async function setWebhookAction(url: string | null) {
   return withActor((db, a) => setAlertWebhook(db, a, url));
 }
 
+export async function setAlertEmailsAction(raw: string | null) {
+  return withActor((db, a) => setAlertEmails(db, a, raw));
+}
+
 export async function sendTestAlertAction() {
   return withActor(async (db, a) => {
     const r = await sendTestAlert(db, a);
-    return { delivered: Boolean(r?.deliveredAt), error: r?.deliveryError ?? null };
+    return {
+      delivered: Boolean(r?.deliveredAt || r?.emailedAt),
+      error: [r?.deliveryError && `webhook: ${r.deliveryError}`, r?.emailError && `email: ${r.emailError}`].filter(Boolean).join("; ") || null,
+    };
   });
 }
 
