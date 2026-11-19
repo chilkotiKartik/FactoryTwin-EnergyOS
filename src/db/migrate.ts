@@ -9,7 +9,7 @@ export async function runMigrations(url: string) {
     if (file && !file.startsWith(":memory:")) mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
   }
   const { db, client } = createDb(url);
-  await client.execute("PRAGMA journal_mode = WAL");
+  if (url.startsWith("file:")) await client.execute("PRAGMA journal_mode = WAL");
   await migrate(db, { migrationsFolder: path.resolve(process.cwd(), "drizzle") });
   return { db, client };
 }

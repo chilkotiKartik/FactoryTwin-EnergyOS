@@ -1,6 +1,6 @@
 import { and, desc, eq, isNotNull, inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
-import { getDb } from "@/db/client";
+import { getDb, isEphemeralDemoDb } from "@/db/client";
 import { anomalies, heats, recommendations } from "@/db/schema";
 import { requireActor } from "@/server/auth/session-next";
 import { dataMode } from "@/server/services/analytics";
@@ -46,6 +46,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {actor.factory.isSimulation ? (
           <div role="note" className="no-print sticky top-0 z-30 flex items-center justify-center gap-2 bg-violet px-3 py-1 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-white">
             Simulation — synthetic data — not field validation
+            {isEphemeralDemoDb() ? " · public demo: changes reset" : ""}
           </div>
         ) : null}
         <Topbar

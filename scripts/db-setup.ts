@@ -2,6 +2,7 @@
  * Create / migrate the database and seed the demo.
  *   pnpm db:setup            migrate + seed (idempotent; keeps existing data)
  *   pnpm db:setup --reset    delete the database file first
+ *   --standalone             checkpoint the WAL so the file can be copied alone (Vercel seed)
  */
 import { existsSync, rmSync } from "node:fs";
 import { runMigrations } from "../src/db/migrate";
@@ -24,6 +25,12 @@ async function main() {
     seedDemoUsers: (process.env.SEED_DEMO_USERS ?? "true") !== "false",
   });
   console.log(res.created ? `Seeded demo factory and scenario "holding-anomaly" in ${Date.now() - t0} ms.` : "Base data already present; nothing seeded.");
+  if (process.argv.includes("--standalone") && url.startsWith("file:")) {
+    // Fold the WAL back into the main file so it can be shipped as one file.
+    await client.execute("PRAGMA wal_checkpoint(TRUNCATE)");
+    await client.execute("PRAGMA journal_mode = DELETE");
+    console.log("Database written as a single standalone file.");
+  }
   client.close();
 }
 
