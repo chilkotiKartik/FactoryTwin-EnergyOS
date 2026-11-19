@@ -22,6 +22,8 @@ const nextConfig: NextConfig = {
   // Every screen is per-user and per-factory, so pages render dynamically.
   serverExternalPackages: ["@libsql/client", "libsql"],
   poweredByHeader: false,
+  // The deploy-time seed database ships with the server bundle (see src/db/client.ts).
+  outputFileTracingIncludes: { "/**": ["./data/seed.db"] },
   experimental: {
     serverActions: { bodySizeLimit: "3mb" },
   },

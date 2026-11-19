@@ -2,6 +2,14 @@
 
 EnergyOS is a standard Next.js Node server with a SQLite file. It needs a persistent disk, so use a VM, container host or PaaS with a volume (serverless platforms with an ephemeral filesystem are not suitable unless `DATABASE_URL` points to a hosted libSQL/Turso database).
 
+## Vercel (public demo)
+
+The `vercel-build` script migrates and seeds `data/seed.db` at deploy time and ships it with the server bundle. With no `DATABASE_URL` set, each server instance copies that file to `/tmp` on cold start. This is a **demo instance**: changes are not durable, reset whenever an instance restarts, and are not shared between instances (a sign-in can be lost if a request lands on a fresh instance). The banner says "public demo: changes reset".
+
+Project environment variables: `COOKIE_SECURE="true"`, `DEMO_PASSWORD`, `SEED_DEMO_USERS="true"`.
+
+For persistence, create a hosted libSQL database (for example Turso), run `pnpm db:setup` against it once, and set `DATABASE_URL="libsql://…"` and `DATABASE_AUTH_TOKEN` in the Vercel project. No code change is needed.
+
 ## Single server
 
 ```bash
