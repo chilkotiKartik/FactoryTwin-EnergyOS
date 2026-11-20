@@ -1,5 +1,6 @@
 import { and, desc, eq, isNotNull, inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { getDb, isEphemeralDemoDb } from "@/db/client";
 import { anomalies, heats, recommendations } from "@/db/schema";
 import { requireActor } from "@/server/auth/session-next";
@@ -8,12 +9,14 @@ import { selectedDay } from "@/server/day";
 import { Sidebar } from "@/components/shell/sidebar";
 import { Topbar } from "@/components/shell/topbar";
 import { can } from "@/server/permissions";
+import { CommandPalette } from "@/components/shell/command-palette";
+import { WelcomeToast } from "@/components/shell/welcome-toast";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const actor = await requireActor();
   if (actor.mustChangePassword) redirect("/account?first=1");
   const db = getDb();
-  const [mode, { day, days }, pending, high] = await Promise.all([
+  const [mode, { day, days }, pending, high, openAnoms] = await Promise.all([
     dataMode(db, actor),
     selectedDay(actor),
     db
@@ -29,7 +32,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       .where(and(eq(anomalies.factoryId, actor.factory.id), eq(anomalies.status, "OPEN"), isNotNull(anomalies.severity), inArray(anomalies.severity, ["HIGH"])))
       .orderBy(desc(heats.startAt))
       .limit(5),
+    db.select({ heatId: anomalies.heatId }).from(anomalies).where(and(eq(anomalies.factoryId, actor.factory.id), eq(anomalies.status, "OPEN"))),
   ]);
+  const dayHeats = day
+    ? await db
+        .select({ id: heats.id, heatNo: heats.heatNo, holdingMinutes: heats.holdingMinutes })
+        .from(heats)
+        .where(and(eq(heats.factoryId, actor.factory.id), eq(heats.dayDate, day)))
+        .orderBy(heats.startAt)
+    : [];
+  const flagged = new Set(openAnoms.map((a) => a.heatId));
   const notifications = [
     ...pending.map((p) => ({ id: p.id, kind: "approval" as const, title: `Recommendation v${p.version} awaits a decision`, body: p.summary, href: `/recommendations/${p.id}` })),
     ...high.map((a) => ({ id: a.id, kind: "anomaly" as const, title: `${a.heatNo} on ${a.dayDate}: high energy variance`, body: a.explanation, href: `/heats/${a.heatId}` })),
@@ -60,6 +72,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           notifications={notifications}
           sticky={!actor.factory.isSimulation}
         />
+        <CommandPalette
+          canSeeAudit={can(actor.role, "audit.view")}
+          isSimulation={actor.factory.isSimulation}
+          heats={dayHeats.map((h) => ({ ...h, flagged: flagged.has(h.id) }))}
+          day={day}
+          days={days}
+          factories={actor.memberships}
+          activeFactoryId={actor.factory.id}
+        />
+        <Suspense fallback={null}>
+          <WelcomeToast />
+        </Suspense>
         <main id="main" className="print-full mx-auto w-full max-w-[1440px] flex-1 px-4 py-5 sm:px-6 lg:px-8">
           {children}
         </main>

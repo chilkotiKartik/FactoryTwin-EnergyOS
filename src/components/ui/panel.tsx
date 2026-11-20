@@ -2,7 +2,7 @@ import { cn } from "@/lib/cn";
 
 export function Panel({ className, children, id }: { className?: string; children: React.ReactNode; id?: string }) {
   return (
-    <section id={id} className={cn("min-w-0 rounded-lg border border-line bg-surface", className)}>
+    <section id={id} className={cn("min-w-0 rounded-card border border-line bg-surface shadow-card", className)}>
       {children}
     </section>
   );

@@ -25,6 +25,7 @@ import { recordSimulatedOutcome } from "@/server/services/execution";
 import { createVerificationReport } from "@/server/services/verification";
 import { resetScenario } from "@/server/services/demo";
 import { updateSettings } from "@/server/services/settings";
+import { registerSandbox, registrationEnabled } from "@/server/services/registration";
 
 import { DAY_COOKIE } from "@/lib/constants";
 
@@ -88,6 +89,34 @@ export async function loginAction(_prev: ActionResult | null, form: FormData): P
 export async function logoutAction() {
   await endSession();
   redirect("/login");
+}
+
+// Sign-up throttling: 3 accounts per client address per 10 minutes (in-process, like login).
+const signups = new Map<string, number[]>();
+
+export async function registerAction(_prev: ActionResult | null, form: FormData): Promise<ActionResult> {
+  if (!registrationEnabled()) return { ok: false, code: "FORBIDDEN", message: "Self-service sign-up is turned off on this deployment." };
+  const h = await headers();
+  const ip = (h.get("x-forwarded-for") ?? h.get("x-real-ip") ?? "local").split(",")[0].trim();
+  const now = Date.now();
+  const recent = (signups.get(ip) ?? []).filter((t) => t > now - 600_000);
+  if (recent.length >= 3) return { ok: false, message: "Too many new accounts from this network. Try again in a few minutes." };
+  const input = {
+    name: String(form.get("name") ?? "").slice(0, 200),
+    email: String(form.get("email") ?? "").slice(0, 300),
+    password: String(form.get("password") ?? "").slice(0, 300),
+    factoryName: String(form.get("factoryName") ?? "").slice(0, 200),
+  };
+  try {
+    const res = await registerSandbox(getDb(), input);
+    if (!res.ok) return { ok: false, code: "VALIDATION", message: res.message, fieldErrors: res.field ? { [res.field]: res.message } : undefined };
+    if (signups.size > 10_000) signups.clear();
+    signups.set(ip, [...recent, now]);
+    await startSession(res.userId);
+  } catch (e) {
+    return toActionError(e);
+  }
+  redirect("/dashboard?welcome=1");
 }
 
 export async function switchFactoryAction(factoryId: string): Promise<ActionResult> {

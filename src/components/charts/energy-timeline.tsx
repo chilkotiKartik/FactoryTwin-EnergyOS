@@ -2,7 +2,9 @@
 
 import { useMemo, useRef, useState, useEffect, useId } from "react";
 import { useRouter } from "next/navigation";
-import { hhmm, fmt } from "@/lib/format";
+import { X } from "lucide-react";
+import { hhmm, fmt, inr } from "@/lib/format";
+import { windowStats } from "@/domain/window";
 
 export interface TimelineHeat {
   id: string;
@@ -54,6 +56,9 @@ export function EnergyTimeline({ points, heats, tariffBands, fromMin, toMin, hig
   const pid = useId().replace(/:/g, "");
   const [wrapRef, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
+  // Window inspector: drag across the plot to select a time window.
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [sel, setSel] = useState<{ a: number; b: number } | null>(null);
 
   const auto = useMemo(() => {
     const active = points.filter((p) => p.kw !== null && p.kw > 1).map((p) => p.m);
@@ -112,13 +117,48 @@ export function EnergyTimeline({ points, heats, tariffBands, fromMin, toMin, hig
   const hoverBand = hover !== null ? tariffBands.find((b) => hover >= b.startMin && hover < b.endMin) : null;
   const phase = hoverHeat ? (hoverHeat.meltEndMin !== null && hover! >= hoverHeat.meltEndMin ? "holding / waiting" : "melting") : "between heats";
 
-  function onMove(e: React.PointerEvent<SVGSVGElement>) {
+  function minuteAt(e: React.PointerEvent<SVGSVGElement>): number | null {
     const r = e.currentTarget.getBoundingClientRect();
     const px = ((e.clientX - r.left) / r.width) * width;
-    if (px < padL || px > width - padR) return setHover(null);
-    const m = Math.floor(x0 + ((px - padL) / innerW) * (x1 - x0));
-    setHover(Math.max(0, Math.min(1439, m)));
+    if (px < padL || px > width - padR) return null;
+    return Math.max(0, Math.min(1439, Math.floor(x0 + ((px - padL) / innerW) * (x1 - x0))));
   }
+
+  function onMove(e: React.PointerEvent<SVGSVGElement>) {
+    const m = minuteAt(e);
+    if (dragFrom !== null && m !== null) setSel({ a: dragFrom, b: m + 1 });
+    setHover(dragFrom !== null ? null : m);
+  }
+
+  function onDown(e: React.PointerEvent<SVGSVGElement>) {
+    const r = e.currentTarget.getBoundingClientRect();
+    const py = ((e.clientY - r.top) / r.height) * height;
+    const m = minuteAt(e);
+    // Only the power plot starts a selection; the heat lane keeps its click-to-open.
+    if (m === null || py > plotTop + plotH || e.button !== 0) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDragFrom(m);
+    setSel(null);
+  }
+
+  function onUp() {
+    if (dragFrom === null) return;
+    setDragFrom(null);
+    setSel((cur) => (cur && Math.abs(cur.b - cur.a) >= 3 ? cur : null));
+  }
+
+  useEffect(() => {
+    if (!sel) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSel(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sel]);
+
+  const stats = sel && dragFrom === null ? windowStats(points, tariffBands, heats, sel.a, sel.b) : null;
+  const selA = sel ? Math.min(sel.a, sel.b) : 0;
+  const selB = sel ? Math.max(sel.a, sel.b) : 0;
 
   return (
     <div ref={wrapRef} className="relative w-full select-none overflow-x-clip">
@@ -128,9 +168,14 @@ export function EnergyTimeline({ points, heats, tariffBands, fromMin, toMin, hig
         viewBox={`0 0 ${width} ${height}`}
         role="img"
         aria-label={ariaLabel}
+        data-testid="energy-timeline"
         onPointerMove={onMove}
+        onPointerDown={onDown}
+        onPointerUp={onUp}
+        onPointerCancel={onUp}
+        onDoubleClick={() => setSel(null)}
         onPointerLeave={() => setHover(null)}
-        className="block touch-pan-y"
+        className="block cursor-crosshair touch-pan-y"
       >
         <defs>
           <pattern id={`hold-${pid}`} patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(135)">
@@ -249,6 +294,14 @@ export function EnergyTimeline({ points, heats, tariffBands, fromMin, toMin, hig
           </text>
         ))}
 
+        {sel ? (
+          <g pointerEvents="none" data-testid="window-selection">
+            <rect x={sx(Math.max(selA, x0))} y={plotTop} width={Math.max(1, sx(Math.min(selB, x1)) - sx(Math.max(selA, x0)))} height={plotH} fill="var(--blue)" opacity={0.12} />
+            <line x1={sx(selA)} x2={sx(selA)} y1={plotTop} y2={plotTop + plotH} stroke="var(--blue)" strokeWidth={1.5} />
+            <line x1={sx(selB)} x2={sx(selB)} y1={plotTop} y2={plotTop + plotH} stroke="var(--blue)" strokeWidth={1.5} />
+          </g>
+        ) : null}
+
         {hover !== null ? <line x1={sx(hover + 0.5)} x2={sx(hover + 0.5)} y1={plotTop} y2={laneY + laneH - 6} stroke="var(--ink)" strokeWidth={1} opacity={0.5} pointerEvents="none" /> : null}
       </svg>
 
@@ -261,6 +314,35 @@ export function EnergyTimeline({ points, heats, tariffBands, fromMin, toMin, hig
           <p className="num text-ink-2">{hoverPoint?.kw === null || hoverPoint === null ? "No reading" : `${fmt(hoverPoint?.kw, 0)} kW`}</p>
           <p className="text-ink-3">{hoverHeat ? `${hoverHeat.heatNo} · ${phase}` : "No heat in the log"}</p>
           <p className="text-ink-3">{hoverBand ? `${hoverBand.label} · ₹${(hoverBand.ratePaise / 100).toFixed(2)}/kWh` : "—"}</p>
+        </div>
+      ) : null}
+
+      {stats ? (
+        <div role="status" aria-live="polite" data-testid="window-stats" className="mt-1 flex animate-fade-up flex-wrap items-center gap-x-4 gap-y-1 rounded-control border border-blue/25 bg-blue-soft px-3 py-2 text-[12.5px] text-ink-2">
+          <span className="num font-semibold text-ink">
+            {hhmm(stats.fromMin)}–{hhmm(stats.toMin)} · {stats.minutes} min
+          </span>
+          <span className="num">
+            <b className="text-ink">{fmt(stats.kwh, 0)}</b> kWh
+          </span>
+          <span className="num">
+            <b className="text-ink">{stats.costPaise === null ? "—" : inr(stats.costPaise)}</b> at the tariff
+          </span>
+          {stats.kwh > 0 ? (
+            <span className="num">
+              {(["SOLAR", "NORMAL", "PEAK", "OFFPEAK"] as const)
+                .filter((k) => (stats.kwhByKind[k] ?? 0) > 0.05)
+                .map((k) => `${Math.round(((stats.kwhByKind[k] ?? 0) / stats.kwh) * 100)}% ${k === "OFFPEAK" ? "off-peak" : k.toLowerCase()}`)
+                .join(" · ")}
+            </span>
+          ) : null}
+          <span className="num">avg {fmt(stats.avgKw, 0)} kW</span>
+          {stats.holdingMinutes > 0 ? <span className="num text-amber">{Math.round(stats.holdingMinutes)} min holding</span> : null}
+          <span className="num">{stats.heatsTouched} {stats.heatsTouched === 1 ? "heat" : "heats"}</span>
+          {stats.coveredMinutes < stats.minutes ? <span className="num text-ink-3">{stats.minutes - stats.coveredMinutes} min without readings</span> : null}
+          <button type="button" onClick={() => setSel(null)} className="ml-auto inline-flex items-center gap-1 rounded-control px-1.5 py-0.5 text-ink-2 hover:bg-white/70" aria-label="Clear selected window">
+            <X className="size-3.5" aria-hidden /> Clear
+          </button>
         </div>
       ) : null}
 
@@ -283,6 +365,7 @@ export function EnergyTimeline({ points, heats, tariffBands, fromMin, toMin, hig
         <li className="flex items-center gap-1.5">
           <span className="h-2.5 w-4 rounded-sm" style={{ background: "var(--band-peak)" }} aria-hidden /> Peak window
         </li>
+        {!stats ? <li className="text-blue sm:ml-auto">Drag across the chart to measure a time window</li> : null}
       </ul>
     </div>
   );

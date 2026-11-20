@@ -26,6 +26,9 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: { "/**": ["./data/seed.db"] },
   experimental: {
     serverActions: { bodySizeLimit: "3mb" },
+    // The build cache does not see Tailwind's source scan, so a warm cache can ship
+    // stale CSS (new utility classes missing). Build cold; it costs a few seconds.
+    turbopackFileSystemCacheForBuild: false,
   },
   turbopack: {
     rules: {

@@ -8,6 +8,8 @@ The `vercel-build` script migrates and seeds `data/seed.db` at deploy time and s
 
 Project environment variables: `COOKIE_SECURE="true"`, `SEED_DEMO_USERS="true"` and a non-default `DEMO_PASSWORD` (the start-up check refuses the published default over HTTPS). The password is read at build time for seeding and shown on the login page, so redeploy after changing it.
 
+Self-service sign-up (`/register`) is on unless `ALLOW_REGISTRATION="false"`. On Vercel the database is a per-instance copy in `/tmp`, so sandbox accounts created there disappear when the instance is recycled; the sign-up page says so.
+
 For persistence, create a hosted libSQL database (for example Turso), run `pnpm db:setup` against it once, and set `DATABASE_URL="libsql://…"` and `DATABASE_AUTH_TOKEN` in the Vercel project. No code change is needed.
 
 ## Single server
