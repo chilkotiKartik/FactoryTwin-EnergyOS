@@ -59,6 +59,7 @@ Sign in with any demo account (password `energyos-demo`, set by `DEMO_PASSWORD`)
 | `DATABASE_URL` | `file:./data/energyos.db` | libSQL/SQLite URL |
 | `SEED_DEMO_USERS` | `true` | Seed demo logins. Set `false` for any shared deployment. |
 | `DEMO_PASSWORD` | `energyos-demo` | Password for seeded demo accounts |
+| `ALLOW_REGISTRATION` | `true` | Self-service sign-up at `/register`. Each account gets its own private synthetic sandbox factory; set `false` to turn sign-up off. |
 | `COOKIE_SECURE` | `false` | `true` when served over HTTPS (also enables HSTS) |
 | `ANALYSIS_DEBOUNCE_MS` | `60000` | Delay before re-analysing a factory after new meter data arrives through the ingest API |
 | `ALLOW_PRIVATE_WEBHOOKS` | `false` | Allow alert webhooks to private hosts or plain HTTP (an internal SMS/WhatsApp gateway) |

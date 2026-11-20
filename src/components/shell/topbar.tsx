@@ -8,6 +8,7 @@ import * as Menu from "@radix-ui/react-dropdown-menu";
 import { Bell, CalendarDays, ChevronDown, ClipboardCheck, LogOut, UserCog, Radio, TriangleAlert, WifiOff, FlaskConical, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { logoutAction, setDayAction, switchFactoryAction } from "@/app/actions";
+import { PaletteButton } from "./command-palette";
 import { cn } from "@/lib/cn";
 import { dayLabel, localTime } from "@/lib/format";
 import { Tip } from "@/components/ui/tip";
@@ -111,6 +112,7 @@ export function Topbar({ actor, factories, activeFactoryId, mode, day, days, tim
         <span className="hidden text-[12px] text-ink-3 xl:inline">Shift 06:00–22:00 · {timeZone}</span>
 
         <div className="ml-auto flex items-center gap-2">
+          <PaletteButton />
           <ModeBadge mode={mode} timeZone={timeZone} />
 
           <Popover.Root>
@@ -182,13 +184,13 @@ export function Topbar({ actor, factories, activeFactoryId, mode, day, days, tim
                     <UserCog className="size-4" /> Account and password
                   </Link>
                 </Menu.Item>
-                <form action={logoutAction}>
-                  <Menu.Item asChild>
-                    <button type="submit" className="flex w-full items-center gap-2 rounded px-3 py-2 text-[13px] text-ink outline-none data-[highlighted]:bg-surface-3">
-                      <LogOut className="size-4" /> Sign out
-                    </button>
-                  </Menu.Item>
-                </form>
+                {/* Not a <form> inside the menu: the menu unmounts on select, which cancelled the submit. */}
+                <Menu.Item
+                  onSelect={() => start(() => logoutAction())}
+                  className="flex w-full cursor-pointer items-center gap-2 rounded px-3 py-2 text-[13px] text-ink outline-none data-[highlighted]:bg-surface-3"
+                >
+                  <LogOut className="size-4" /> Sign out
+                </Menu.Item>
               </Menu.Content>
             </Menu.Portal>
           </Menu.Root>
