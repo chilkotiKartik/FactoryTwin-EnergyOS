@@ -5,6 +5,9 @@ import { currentActor } from "@/server/auth/session-next";
 import { registrationEnabled } from "@/server/services/registration";
 import { PublicShell } from "@/components/public/public-shell";
 import { ShiftSimulator } from "@/components/public/shift-simulator";
+import { EnergyFlow } from "@/components/graphics/energy-flow";
+import { CountUp } from "@/components/motion/count-up";
+import { Reveal } from "@/components/motion/reveal";
 
 export const metadata: Metadata = {
   title: {
@@ -68,12 +71,15 @@ export default async function Landing() {
   const canRegister = registrationEnabled();
   return (
     <PublicShell signedIn={signedIn}>
-      <section className="bg-blueprint text-shell-ink">
+      <section className="bg-blueprint relative isolate overflow-hidden text-shell-ink">
+        <div className="aurora -z-10" aria-hidden />
         <div className="mx-auto grid max-w-6xl gap-12 px-4 pb-16 pt-14 sm:px-6 lg:pt-20">
-          <div className="grid animate-fade-up gap-10 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)] lg:items-end">
+          <div className="grid animate-fade-up gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-center">
             <div>
               <p className="text-eyebrow font-semibold uppercase text-amber-mark">For induction-furnace foundries</p>
-              <h1 className="mt-4 text-[2.4rem] font-semibold leading-[1.08] tracking-tight text-white sm:text-display">Every heat, the energy it should have used.</h1>
+              <h1 className="mt-4 text-[2.4rem] font-semibold leading-[1.08] tracking-tight text-white sm:text-display">
+                Every heat, the energy it <span className="text-sheen">should have used.</span>
+              </h1>
               <p className="mt-5 max-w-xl text-[16px] leading-relaxed text-shell-ink">
                 FactoryTwin EnergyOS links furnace meter data to each heat, explains overruns, and plans the next shift around tariffs and the moulding line. A supervisor approves. Savings are
                 verified afterwards.
@@ -99,7 +105,11 @@ export default async function Landing() {
               </div>
             </div>
             <div>
-              <dl className="grid max-w-md grid-cols-3 gap-4 border-t border-white/10 pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
+              <div className="rounded-card border border-white/10 bg-white/[0.03] p-3 shadow-overlay backdrop-blur-sm">
+                <EnergyFlow tone="dark" idPrefix="hero" />
+                <p className="mt-1 text-center text-[11px] text-shell-muted">Illustration of the energy path the app models. Not a live feed.</p>
+              </div>
+              <dl className="mt-6 grid grid-cols-3 gap-4 border-t border-white/10 pt-6">
                 {[
                   ["−3.4%", "kWh per tonne"],
                   ["−7.4%", "₹ per tonne"],
@@ -107,20 +117,22 @@ export default async function Landing() {
                 ].map(([v, l]) => (
                   <div key={l}>
                     <dt className="sr-only">{l}</dt>
-                    <dd className="num text-[22px] font-semibold text-white">{v}</dd>
+                    <dd className="num text-[22px] font-semibold text-white">
+                      <CountUp value={v} />
+                    </dd>
                     <dd className="text-[12px] text-shell-muted">{l}</dd>
                   </div>
                 ))}
               </dl>
-              <p className="mt-2 text-[11.5px] text-shell-muted lg:pl-8">Deck reference day, simulated. Not a field result.</p>
+              <p className="mt-2 text-[11.5px] text-shell-muted">Deck reference day, simulated. Not a field result.</p>
             </div>
           </div>
-          <div id="simulator" className="scroll-mt-20">
-            <p className="mb-3 text-[13px] text-shell-ink">
-              <b className="text-white">Try it.</b> Change the shift and watch the optimiser re-plan it.
-            </p>
-            <ShiftSimulator />
-          </div>
+            <div id="simulator" className="scroll-mt-20">
+              <p className="mb-3 text-[13px] text-shell-ink">
+                <b className="text-white">Try it.</b> Change the shift and watch the optimiser re-plan it.
+              </p>
+              <ShiftSimulator />
+            </div>
         </div>
       </section>
 
@@ -131,16 +143,16 @@ export default async function Landing() {
         </h2>
         <ol className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {LOOP.map((s, i) => (
-            <li key={s.title} className="rounded-card border border-line bg-surface p-5 shadow-card">
+            <Reveal as="li" delay={i * 0.07} key={s.title} className="lift group rounded-card border border-line bg-surface p-5 shadow-card hover:border-amber-mark/40">
               <div className="flex items-center gap-3">
-                <span className="grid size-9 place-items-center rounded-control bg-amber-soft text-amber">
+                <span className="grid size-9 place-items-center rounded-control bg-amber-soft text-amber transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-6">
                   <s.icon className="size-4.5" aria-hidden />
                 </span>
                 <span className="num text-[12px] font-semibold text-ink-3">{String(i + 1).padStart(2, "0")}</span>
               </div>
               <h3 className="mt-4 text-[16px] font-semibold text-ink">{s.title}</h3>
               <p className="mt-1.5 text-[14px] leading-relaxed text-ink-2">{s.body}</p>
-            </li>
+            </Reveal>
           ))}
         </ol>
         <Link href="/how-it-works" className="mt-8 inline-flex items-center gap-1.5 text-[14px] font-medium text-blue underline-offset-4 hover:underline">
@@ -154,12 +166,12 @@ export default async function Landing() {
             Built to be trusted on a shop floor.
           </h2>
           <div className="mt-10 grid gap-8 md:grid-cols-3">
-            {RULES.map((r) => (
-              <div key={r.title}>
+            {RULES.map((r, i) => (
+              <Reveal key={r.title} delay={i * 0.1}>
                 <r.icon className="size-6 text-teal" aria-hidden />
                 <h3 className="mt-3 text-[16px] font-semibold text-ink">{r.title}</h3>
                 <p className="mt-1.5 text-[14px] leading-relaxed text-ink-2">{r.body}</p>
-              </div>
+              </Reveal>
             ))}
           </div>
         </div>

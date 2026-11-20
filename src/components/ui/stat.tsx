@@ -2,6 +2,7 @@ import { Info } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Evidence } from "./badge";
 import { Tip } from "./tip";
+import { CountUp } from "@/components/motion/count-up";
 
 export interface StatProps {
   label: string;
@@ -29,7 +30,7 @@ export function Stat({ label, value, unit, definition, evidence, delta, emphasis
         </Tip>
       </div>
       <div className="flex items-baseline gap-1.5">
-        <span className="num text-[26px] font-semibold leading-none tracking-tight text-ink">{value}</span>
+        <CountUp value={value} className="num text-[26px] font-semibold leading-none tracking-tight text-ink" />
         {unit ? <span className="text-[13px] text-ink-3">{unit}</span> : null}
       </div>
       <div className="flex min-h-5 flex-wrap items-center gap-1.5">

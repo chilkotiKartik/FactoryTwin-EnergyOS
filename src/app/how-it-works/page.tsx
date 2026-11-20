@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { currentActor } from "@/server/auth/session-next";
 import { PublicShell } from "@/components/public/public-shell";
+import { Reveal } from "@/components/motion/reveal";
 
 export const metadata: Metadata = { title: "How it works" };
 
@@ -64,14 +65,16 @@ export default async function HowItWorks() {
               <span className="num absolute -left-[37px] top-0 grid size-6 place-items-center rounded-full border border-line bg-surface text-[11px] font-semibold text-ink-2 sm:-left-[45px]">
                 {i + 1}
               </span>
-              <article className="rounded-card border border-line bg-surface p-5 shadow-card">
-                <h2 className="text-[18px] font-semibold text-ink">{s.title}</h2>
-                <p className="mt-2 text-[14px] leading-relaxed text-ink-2">{s.what}</p>
-                <p className="mt-3 rounded-control border border-teal/20 bg-teal-soft px-3 py-2 text-[13px] leading-relaxed text-ink-2">
-                  <b className="text-teal">Guardrail.</b> {s.guard}
-                </p>
-                <p className="mt-3 text-[12px] text-ink-3">In the app: {s.where}</p>
-              </article>
+              <Reveal delay={0.05}>
+                <article className="lift rounded-card border border-line bg-surface p-5 shadow-card">
+                  <h2 className="text-[18px] font-semibold text-ink">{s.title}</h2>
+                  <p className="mt-2 text-[14px] leading-relaxed text-ink-2">{s.what}</p>
+                  <p className="mt-3 rounded-control border border-teal/20 bg-teal-soft px-3 py-2 text-[13px] leading-relaxed text-ink-2">
+                    <b className="text-teal">Guardrail.</b> {s.guard}
+                  </p>
+                  <p className="mt-3 text-[12px] text-ink-3">In the app: {s.where}</p>
+                </article>
+              </Reveal>
             </li>
           ))}
         </ol>

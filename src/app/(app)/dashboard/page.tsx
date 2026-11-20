@@ -17,6 +17,7 @@ import { Evidence, Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty";
 import { Button } from "@/components/ui/button";
 import { DecisionLoop } from "@/components/dashboard/decision-loop";
+import { EnergyFlow } from "@/components/graphics/energy-flow";
 import { EnergyTimeline } from "@/components/charts/energy-timeline";
 import { SecByHeat } from "@/components/charts/sec-by-heat";
 import { DailyTrend } from "@/components/charts/daily-trend";
@@ -90,6 +91,26 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
           </nav>
         }
       />
+
+      <Panel className="mb-5 overflow-hidden">
+        <PanelHeader
+          title="Energy path"
+          subtitle={`Where the energy for ${period} went. The figures are from stored records; the animation is an illustration, not a live feed.`}
+          actions={<Evidence label={sum.evidence} />}
+        />
+        <div className="bg-blueprint px-3 pb-2 pt-3 sm:px-6">
+          <EnergyFlow
+            tone="dark"
+            idPrefix="dash"
+            className="mx-auto max-w-3xl"
+            figures={{
+              meter: `${fmt(sum.energyKwh, 0)} kWh`,
+              furnace: `${sum.heatsTapped} heats · ${fmt(sum.holdingMinutes, 0)} min holding`,
+              moulds: `${fmt(sum.tonnesPoured, 2)} t poured`,
+            }}
+          />
+        </div>
+      </Panel>
 
       <Panel className="mb-5">
         <PanelHeader title="Decision loop" subtitle="From meter reading to verified outcome. Each step reads stored records; click a step to open it." />

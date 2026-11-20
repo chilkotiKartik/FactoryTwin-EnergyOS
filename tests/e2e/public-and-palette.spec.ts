@@ -83,3 +83,13 @@ test("energy window inspector measures a dragged range", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(stats).toBeHidden();
 });
+
+test("animations stop under reduced motion and figures settle on real values", async ({ browser }) => {
+  const ctx = await browser.newContext({ reducedMotion: "reduce" });
+  const page = await ctx.newPage();
+  await page.goto("/");
+  const iterations = await page.locator(".flow-dash").first().evaluate((el) => getComputedStyle(el).animationIterationCount);
+  expect(iterations).toBe("1");
+  await expect(page.getByText("−3.4%").first()).toBeVisible();
+  await ctx.close();
+});

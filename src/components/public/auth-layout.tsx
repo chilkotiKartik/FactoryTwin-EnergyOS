@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Logo } from "./logo";
+import { EnergyFlow } from "@/components/graphics/energy-flow";
 
 const LOOP = [
   "Link meter energy to each heat",
@@ -15,7 +16,8 @@ const LOOP = [
 export function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <main className="grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
-      <section className="bg-blueprint relative hidden flex-col justify-between overflow-hidden p-10 text-shell-ink lg:flex">
+      <section className="bg-blueprint relative isolate hidden flex-col justify-between overflow-hidden p-10 text-shell-ink lg:flex">
+        <div className="aurora -z-10" aria-hidden />
         <Logo />
         <div className="max-w-lg">
           <p className="text-eyebrow font-semibold uppercase text-amber-mark">Challenge 04 · Smart Manufacturing</p>
@@ -28,6 +30,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
               </li>
             ))}
           </ol>
+          <EnergyFlow tone="dark" idPrefix="auth" className="mt-10 opacity-90" />
         </div>
         <p className="max-w-lg text-[12px] text-shell-muted">
           Recommendation only. Nothing in this application sends commands to plant equipment. Demonstration factories run on synthetic data and are labelled as such everywhere.

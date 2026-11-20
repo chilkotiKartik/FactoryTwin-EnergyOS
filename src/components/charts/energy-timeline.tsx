@@ -185,6 +185,10 @@ export function EnergyTimeline({ points, heats, tariffBands, fromMin, toMin, hig
           <pattern id={`gap-${pid}`} patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
             <line x1="0" y1="0" x2="0" y2="6" stroke="var(--ink-3)" strokeWidth="1" />
           </pattern>
+          <linearGradient id={`area-${pid}`} x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0" stopColor="var(--blue)" stopOpacity="0.22" />
+            <stop offset="1" stopColor="var(--blue)" stopOpacity="0.02" />
+          </linearGradient>
           <clipPath id={`clip-${pid}`}>
             <rect x={padL} y={0} width={innerW} height={height} />
           </clipPath>
@@ -236,9 +240,17 @@ export function EnergyTimeline({ points, heats, tariffBands, fromMin, toMin, hig
         </text>
 
         <g clipPath={`url(#clip-${pid})`}>
-          {segments.map((d, i) => (
-            <path key={i} d={d} fill="none" stroke="var(--ink)" strokeWidth={1.4} strokeLinejoin="round" />
-          ))}
+          <g className="sweep-in">
+            {segments.map((d, i) => {
+              // Soft area under the trace, closed down to the 0 kW baseline.
+              const first = /^M([\d.-]+),/.exec(d)?.[1];
+              const last = /L([\d.-]+),[\d.-]+$/.exec(d)?.[1];
+              return first && last ? <path key={`a${i}`} d={`${d}L${last},${sy(0).toFixed(1)}L${first},${sy(0).toFixed(1)}Z`} fill={`url(#area-${pid})`} stroke="none" /> : null;
+            })}
+            {segments.map((d, i) => (
+              <path key={i} d={d} fill="none" stroke="var(--ink)" strokeWidth={1.4} strokeLinejoin="round" />
+            ))}
+          </g>
         </g>
 
         {/* Heat lane */}
