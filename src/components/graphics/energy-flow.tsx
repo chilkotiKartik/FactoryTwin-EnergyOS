@@ -46,7 +46,7 @@ export function EnergyFlow({
   ];
 
   return (
-    <svg viewBox="0 0 760 250" className={cn("block h-auto w-full", className)} role="img" aria-label={title}>
+    <svg viewBox="0 0 760 252" className={cn("block h-auto w-full", className)} role="img" aria-label={title}>
       <defs>
         <linearGradient id={g("molten")} x1="0" x2="0" y1="0" y2="1">
           <stop offset="0" stopColor="#fff3c4" />
@@ -174,11 +174,11 @@ export function EnergyFlow({
         { x: 657, t: "Moulding line", s: figures?.moulds ?? "mould-ready times" },
       ].map((l) => (
         <g key={l.t}>
-          <text x={l.x} y="216" textAnchor="middle" fontSize="12" fontWeight="600" fill={label}>
+          <text x={l.x} y="217" textAnchor="middle" fontSize="14" fontWeight="600" fill={label}>
             {l.t}
           </text>
           {l.s ? (
-            <text x={l.x} y="233" textAnchor="middle" fontSize="11" fill={muted} className="num">
+            <text x={l.x} y="237" textAnchor="middle" fontSize="12.5" fill={muted} className="num">
               {l.s}
             </text>
           ) : null}

@@ -15,7 +15,8 @@ export default async function RegisterPage() {
   const enabled = registrationEnabled();
   return (
     <AuthLayout>
-      <h1 className="text-title font-semibold tracking-tight">Create your sandbox</h1>
+      <p className="text-eyebrow font-semibold uppercase text-amber">Free · private · synthetic</p>
+      <h1 className="mt-2 text-[2rem] font-semibold leading-tight tracking-tight text-ink">Create your sandbox</h1>
       <p className="mt-1 text-[14px] text-ink-2">You get a private factory filled with 31 days of synthetic furnace data, so you can try the whole loop yourself.</p>
       {enabled ? (
         <>

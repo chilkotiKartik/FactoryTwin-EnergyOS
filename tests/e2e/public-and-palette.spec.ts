@@ -93,3 +93,10 @@ test("animations stop under reduced motion and figures settle on real values", a
   await expect(page.getByText("−3.4%").first()).toBeVisible();
   await ctx.close();
 });
+
+test("one-click demo role signs in", async ({ page }) => {
+  await page.context().clearCookies();
+  await page.goto("/login");
+  await Promise.all([page.waitForURL("**/dashboard"), page.getByRole("button", { name: /Sign in as .*Operator/ }).click()]);
+  await expect(page.getByRole("heading", { name: "Operations dashboard" })).toBeVisible();
+});

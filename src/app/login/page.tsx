@@ -13,38 +13,32 @@ export default async function LoginPage() {
   const showDemo = (process.env.SEED_DEMO_USERS ?? "true") !== "false";
   return (
     <AuthLayout>
-      <h1 className="text-title font-semibold tracking-tight">Sign in</h1>
-      <p className="mt-1 text-[14px] text-ink-2">Use your factory account.</p>
-      <LoginForm />
+      <p className="text-eyebrow font-semibold uppercase text-amber">Welcome back</p>
+      <h1 className="mt-2 text-[2rem] font-semibold leading-tight tracking-tight text-ink">Sign in</h1>
+      <p className="mt-1.5 text-[14.5px] text-ink-2">Pick up where the last shift left off.</p>
+      <LoginForm
+        demo={
+          showDemo
+            ? {
+                password: process.env.DEMO_PASSWORD ?? "energyos-demo",
+                accounts: [
+                  { email: "supervisor@foundry-a.test", name: "Ravi Patil", role: "Supervisor", can: "Runs and approves plans" },
+                  { email: "owner@foundry-a.test", name: "Owner", role: "Owner", can: "Everything, two factories" },
+                  { email: "analyst@foundry-a.test", name: "Analyst", role: "Analyst", can: "Analyses, can't approve" },
+                  { email: "operator@foundry-a.test", name: "Operator", role: "Operator", can: "Logs heats" },
+                  { email: "owner@foundry-b.test", name: "Foundry B owner", role: "Other tenant", can: "Foundry B only: proves tenant isolation" },
+                ],
+              }
+            : undefined
+        }
+      />
       {registrationEnabled() ? (
-        <p className="mt-4 text-[13px] text-ink-2">
+        <p className="mt-6 text-center text-[13.5px] text-ink-2">
           New here?{" "}
-          <Link href="/register" className="font-medium text-blue underline-offset-4 hover:underline">
+          <Link href="/register" className="font-semibold text-blue underline-offset-4 hover:underline">
             Create a free sandbox account
           </Link>
         </p>
-      ) : null}
-      {showDemo ? (
-        <div className="mt-8 rounded-card border border-line bg-surface p-4 shadow-card">
-          <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Demo accounts (synthetic factory)</p>
-          <p className="mt-1 text-[12px] text-ink-3">
-            Password for all: <code className="font-mono text-ink">{process.env.DEMO_PASSWORD ?? "energyos-demo"}</code>
-          </p>
-          <ul className="mt-2 space-y-1 text-[13px]">
-            {[
-              ["supervisor@foundry-a.test", "Supervisor: runs, approves"],
-              ["owner@foundry-a.test", "Owner: everything, two factories"],
-              ["analyst@foundry-a.test", "Analyst: analyses, cannot approve"],
-              ["operator@foundry-a.test", "Operator: logs heats"],
-              ["owner@foundry-b.test", "Other tenant (Foundry B only)"],
-            ].map(([e, r]) => (
-              <li key={e} className="flex flex-col">
-                <code className="font-mono text-[12px] text-ink">{e}</code>
-                <span className="text-[12px] text-ink-3">{r}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
       ) : null}
     </AuthLayout>
   );
