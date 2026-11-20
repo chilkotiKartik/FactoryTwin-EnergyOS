@@ -100,3 +100,29 @@ test("one-click demo role signs in", async ({ page }) => {
   await Promise.all([page.waitForURL("**/dashboard"), page.getByRole("button", { name: /Sign in as .*Operator/ }).click()]);
   await expect(page.getByRole("heading", { name: "Operations dashboard" })).toBeVisible();
 });
+
+test("sign out from the account menu, then sign in as a different role", async ({ page }) => {
+  await page.context().clearCookies();
+  await page.goto("/login");
+  await Promise.all([page.waitForURL("**/dashboard"), page.getByRole("button", { name: /Sign in as .*Supervisor/ }).click()]);
+  await expect(page.getByTestId("current-role")).toHaveText("Supervisor");
+  await page.getByRole("button", { name: "Account menu" }).click();
+  await Promise.all([page.waitForURL("**/login"), page.getByRole("menuitem", { name: "Sign out" }).click()]);
+  await Promise.all([page.waitForURL("**/dashboard"), page.getByRole("button", { name: /Sign in as .*Analyst/ }).click()]);
+  await expect(page.getByTestId("current-role")).toHaveText("Analyst");
+  // Visiting /login while signed in says who you are and offers to switch.
+  await page.goto("/login");
+  await expect(page.getByText("Already signed in")).toBeVisible();
+  await Promise.all([page.waitForURL("**/login"), page.getByRole("button", { name: "Sign out and use another account" }).click()]);
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+});
+
+test("sign out from the command palette", async ({ page }) => {
+  await page.context().clearCookies();
+  await page.goto("/login");
+  await Promise.all([page.waitForURL("**/dashboard"), page.getByRole("button", { name: /Sign in as .*Operator/ }).click()]);
+  await page.keyboard.press("Control+k");
+  await page.keyboard.type("sign out");
+  await Promise.all([page.waitForURL("**/login"), page.keyboard.press("Enter")]);
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+});

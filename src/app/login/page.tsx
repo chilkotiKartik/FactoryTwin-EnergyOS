@@ -1,15 +1,38 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { currentActor } from "@/server/auth/session-next";
 import { registrationEnabled } from "@/server/services/registration";
 import { AuthLayout } from "@/components/public/auth-layout";
 import { LoginForm } from "./login-form";
+import { logoutAction } from "@/app/actions";
+import { ROLE_LABEL } from "@/server/permissions";
 
 export const metadata: Metadata = { title: "Sign in" };
 
 export default async function LoginPage() {
-  if (await currentActor()) redirect("/dashboard");
+  const actor = await currentActor();
+  if (actor) {
+    // Say who is signed in instead of silently bouncing to the dashboard, so switching roles is obvious.
+    return (
+      <AuthLayout>
+        <p className="text-eyebrow font-semibold uppercase text-amber">Already signed in</p>
+        <h1 className="mt-2 text-[2rem] font-semibold leading-tight tracking-tight text-ink">Hi, {actor.name.split(" ")[0]}</h1>
+        <p className="mt-1.5 text-[14.5px] text-ink-2">
+          You are signed in as <b className="text-ink">{actor.email}</b> ({ROLE_LABEL[actor.role]}, {actor.factory.name}).
+        </p>
+        <div className="mt-7 flex flex-col gap-3">
+          <Link href="/dashboard" className="inline-flex h-12 items-center justify-center gap-2 rounded-control bg-ink text-[15px] font-medium text-white shadow-raised hover:bg-ink/85">
+            Continue to the dashboard
+          </Link>
+          <form action={logoutAction}>
+            <button type="submit" className="inline-flex h-11 w-full items-center justify-center rounded-control border border-line-strong bg-surface text-[14px] font-medium text-ink hover:bg-surface-3">
+              Sign out and use another account
+            </button>
+          </form>
+        </div>
+      </AuthLayout>
+    );
+  }
   const showDemo = (process.env.SEED_DEMO_USERS ?? "true") !== "false";
   return (
     <AuthLayout>

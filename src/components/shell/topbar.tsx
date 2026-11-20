@@ -184,13 +184,13 @@ export function Topbar({ actor, factories, activeFactoryId, mode, day, days, tim
                     <UserCog className="size-4" /> Account and password
                   </Link>
                 </Menu.Item>
-                <form action={logoutAction}>
-                  <Menu.Item asChild>
-                    <button type="submit" className="flex w-full items-center gap-2 rounded px-3 py-2 text-[13px] text-ink outline-none data-[highlighted]:bg-surface-3">
-                      <LogOut className="size-4" /> Sign out
-                    </button>
-                  </Menu.Item>
-                </form>
+                {/* Not a <form> inside the menu: the menu unmounts on select, which cancelled the submit. */}
+                <Menu.Item
+                  onSelect={() => start(() => logoutAction())}
+                  className="flex w-full cursor-pointer items-center gap-2 rounded px-3 py-2 text-[13px] text-ink outline-none data-[highlighted]:bg-surface-3"
+                >
+                  <LogOut className="size-4" /> Sign out
+                </Menu.Item>
               </Menu.Content>
             </Menu.Portal>
           </Menu.Root>
